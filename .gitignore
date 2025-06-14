@@ -1,0 +1,26 @@
+# dependencies
+/node_modules
+
+# builds
+/dist
+/release
+/build
+
+# environment variables
+.env
+
+# SQLite database files
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+/data/sqlite.db  # optional: ignore if you want to keep db local
+
+# logs
+*.log
+
+# OS/mac files
+.DS_Store
+
+# IDE/project config
+.vscode
+.idea
