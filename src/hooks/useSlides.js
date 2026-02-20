@@ -28,7 +28,7 @@ const useSlides = () => {
       unsaved: false,
       savedToBackend: false,
     };
-  
+
     setSlides((prev) => {
       const updated = [...prev, newSlide];
       setTimeout(() => {
@@ -36,9 +36,26 @@ const useSlides = () => {
       }, 0);
       return updated;
     });
-  
+
     setCurrentIndex((prev) => prev + 1);
-    return slides.length; // or return updated.length - 1 if needed
+    // Removed stale return value — callers must use the callback for the real index.
+  };
+
+  // Adds multiple slides at once in a single state update, each with editMode "stanza".
+  // Avoids the stale-index bug that occurs when addSlide is called in a loop.
+  const addMultipleSlides = (slideLinesArray) => {
+    if (!slideLinesArray.length) return;
+    setSlides((prev) => {
+      const newSlides = slideLinesArray.map((lines) => ({
+        id: generateId(),
+        lines,
+        editMode: "stanza",
+        unsaved: false,
+        savedToBackend: false,
+      }));
+      return [...prev, ...newSlides];
+    });
+    setCurrentIndex((prev) => prev + slideLinesArray.length);
   };
 
   const duplicateSlide = (index, callback) => {
@@ -51,10 +68,15 @@ const useSlides = () => {
       savedToBackend: false,
     };
 
-    const updated = [...slides, copy];
-    setSlides(updated);
-    setCurrentIndex(updated.length - 1);
-    setTimeout(() => callback?.(updated.length - 1, copy), 0);
+    // Insert the duplicate immediately after the source slide, not always at the end.
+    setSlides((prev) => {
+      const updated = [...prev];
+      updated.splice(index + 1, 0, copy);
+      return updated;
+    });
+    const newIndex = index + 1;
+    setCurrentIndex(newIndex);
+    setTimeout(() => callback?.(newIndex, copy), 0);
   };
 
   const deleteSlide = (index) => {
@@ -197,6 +219,7 @@ const useSlides = () => {
     currentIndex,
     currentSlide,
     addSlide,
+    addMultipleSlides,
     duplicateSlide,
     deleteSlide,
     reorderSlides,

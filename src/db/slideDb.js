@@ -10,7 +10,7 @@ function openDB() {
 
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onerror = () => reject("❌ Failed to open IndexedDB");
+    request.onerror = () => reject(request.error);
 
     request.onsuccess = () => {
       db = request.result;
@@ -18,45 +18,62 @@ function openDB() {
     };
 
     request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      const database = event.target.result;
+      if (!database.objectStoreNames.contains(STORE_NAME)) {
+        database.createObjectStore(STORE_NAME, { keyPath: "id" });
       }
     };
   });
 }
 
-// ✅ Save or update a slide
+// Wraps an IDBRequest in a Promise since IDBRequest is not natively thenable.
+function promisifyRequest(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror  = () => reject(request.error);
+  });
+}
+
+// Wraps an IDBTransaction completion in a Promise.
+function promisifyTransaction(tx) {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = resolve;
+    tx.onerror    = () => reject(tx.error);
+    tx.onabort    = () => reject(tx.error);
+  });
+}
+
+// Save or update a slide
 export async function saveOrUpdateSlide(slideObj) {
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, "readwrite");
+  const database = await openDB();
+  const tx = database.transaction(STORE_NAME, "readwrite");
   const store = tx.objectStore(STORE_NAME);
-  await store.put(slideObj);
-  return tx.complete;
+  store.put(slideObj); // fire-and-forget on the request; wait for tx to complete
+  return promisifyTransaction(tx);
 }
 
-// ✅ Delete by ID
+// Delete by ID
 export async function deleteSlide(id) {
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, "readwrite");
+  const database = await openDB();
+  const tx = database.transaction(STORE_NAME, "readwrite");
   const store = tx.objectStore(STORE_NAME);
-  await store.delete(id);
-  return tx.complete;
+  store.delete(id);
+  return promisifyTransaction(tx);
 }
 
-// ✅ Get all slides for a given presentation
+// Get all slides for a given presentation
 export async function getSlides(presentationName) {
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, "readonly");
+  const database = await openDB();
+  const tx = database.transaction(STORE_NAME, "readonly");
   const store = tx.objectStore(STORE_NAME);
-  const allSlides = await store.getAll();
+  const allSlides = await promisifyRequest(store.getAll());
   return allSlides.filter((s) => s.presentationName === presentationName);
 }
 
-// ✅ Get single slide by ID
+// Get single slide by ID
 export async function getSlideById(id) {
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, "readonly");
+  const database = await openDB();
+  const tx = database.transaction(STORE_NAME, "readonly");
   const store = tx.objectStore(STORE_NAME);
-  return await store.get(id);
+  return promisifyRequest(store.get(id));
 }

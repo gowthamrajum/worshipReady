@@ -5,9 +5,18 @@ import { exportSlideCanvasAsImage } from "../utils/exportSlideCanvasAsImage";
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 
-// —–––––– Offscreen measure canvas (one-time cost) ––––––—
-const _measureCanvas = document.createElement("canvas");
-const _measureCtx    = _measureCanvas.getContext("2d");
+// Lazy-initialised offscreen measure canvas — avoids module-level document access
+// which would fail in non-browser environments (tests, SSR).
+let _measureCanvas = null;
+let _measureCtx = null;
+
+function getMeasureCtx() {
+  if (!_measureCtx) {
+    _measureCanvas = document.createElement("canvas");
+    _measureCtx = _measureCanvas.getContext("2d");
+  }
+  return _measureCtx;
+}
 
 /**
  * Binary-search the largest integer fontSize so that
@@ -20,11 +29,12 @@ function fitLineToWidth(
   minSize    = 12,
   maxSize    = 200
 ) {
+  const ctx = getMeasureCtx();
   let lo = minSize, hi = maxSize, best = minSize;
   while (lo <= hi) {
     const mid = (lo + hi) >>> 1;
-    _measureCtx.font = `${mid}px ${fontFamily}`;
-    if (_measureCtx.measureText(text).width <= maxWidth) {
+    ctx.font = `${mid}px ${fontFamily}`;
+    if (ctx.measureText(text).width <= maxWidth) {
       best = mid;    // it fits, try bigger
       lo   = mid + 1;
     } else {
@@ -46,11 +56,11 @@ function fitStanzaFontSize(
   maxHeight,
   lineHeightFactor = 1.2
 ) {
-  // 1️⃣ horizontal constraint per line
+  // horizontal constraint per line
   const horizSizes = lines.map((t) => fitLineToWidth(t, maxWidth));
   const fontHoriz   = Math.min(...horizSizes);
 
-  // 2️⃣ vertical constraint across all lines
+  // vertical constraint across all lines
   const maxFontVert = Math.floor(
     (maxHeight * 0.9) / (lines.length * lineHeightFactor)
   );
@@ -84,7 +94,7 @@ const CanvasEditor = ({
   }, [slides, currentIndex]);
   useEffect(() => setSelectedIds([]), [currentIndex]);
 
-  // handle arrow-key nudging…
+  // handle arrow-key nudging
   useEffect(() => {
     const handler = (e) => {
       if (!["line","stanza"].includes(editMode) || !selectedIds.length) return;
@@ -171,8 +181,16 @@ const CanvasEditor = ({
 
   const handleDrop = (e) => {
     e.preventDefault();
-    const raw    = e.dataTransfer.getData("text/plain");
-    const parsed = JSON.parse(raw);
+    const raw = e.dataTransfer.getData("text/plain");
+
+    // Guard against malformed or non-app drag data
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return; // not our drag data — ignore
+    }
+    if (!parsed || !["line", "stanza"].includes(parsed.type)) return;
 
     if (!["line","stanza"].includes(editMode)) {
       pendingDrop.current = { event: e, parsed };
@@ -186,33 +204,47 @@ const CanvasEditor = ({
   const handleMouseDown = (e, idx) => {
     if (!["line","stanza"].includes(editMode)) return;
     document.body.style.userSelect = "none";
-    const rect     = internalRef.current.getBoundingClientRect();
-    const offsetX  = e.clientX - rect.left - canvasLines[idx].x;
-    const offsetY  = e.clientY - rect.top  - canvasLines[idx].y;
-    setDragInfo({ index: idx, offsetX, offsetY });
+    const rect = internalRef.current.getBoundingClientRect();
 
+    let selIds;
     if (editMode === "stanza" && canvasLines[idx].stanzaId) {
       const stanzaLines = canvasLines.filter((l) => l.stanzaId === canvasLines[idx].stanzaId);
-      setSelectedIds(stanzaLines.map((l) => l.id));
+      selIds = stanzaLines.map((l) => l.id);
     } else {
-      setSelectedIds([canvasLines[idx].id]);
+      selIds = [canvasLines[idx].id];
     }
+    setSelectedIds(selIds);
+
+    // Store initial mouse position and each selected line's initial position in
+    // dragInfo so that handleMouseMove can compute delta from a stable baseline,
+    // avoiding stale-closure drift during fast consecutive mousemove events.
+    const initialPositions = {};
+    canvasLines.forEach((ln) => {
+      if (selIds.includes(ln.id)) {
+        initialPositions[ln.id] = { x: ln.x, y: ln.y };
+      }
+    });
+
+    setDragInfo({
+      index: idx,
+      startX: e.clientX - rect.left,
+      startY: e.clientY - rect.top,
+      initialPositions,
+    });
   };
 
   const handleMouseMove = (e) => {
     if (!dragInfo) return;
     const rect = internalRef.current.getBoundingClientRect();
-    const x    = e.clientX - rect.left - dragInfo.offsetX;
-    const y    = e.clientY - rect.top  - dragInfo.offsetY;
+    const dx = (e.clientX - rect.left) - dragInfo.startX;
+    const dy = (e.clientY - rect.top)  - dragInfo.startY;
 
-    const isStanza = editMode === "stanza" && canvasLines[dragInfo.index].stanzaId;
-    const updated = canvasLines.map((ln, i) => {
-      if (isStanza && selectedIds.includes(ln.id)) {
-        return { ...ln, x: ln.x + (x - canvasLines[dragInfo.index].x),
-                         y: ln.y + (y - canvasLines[dragInfo.index].y) };
-      }
-      else if (!isStanza && i === dragInfo.index) {
-        return { ...ln, x, y };
+    // Apply delta to each selected line's initial (mousedown) position so that
+    // cumulative rounding errors and stale React state cannot cause drift.
+    const updated = canvasLines.map((ln) => {
+      const init = dragInfo.initialPositions[ln.id];
+      if (init) {
+        return { ...ln, x: init.x + dx, y: init.y + dy };
       }
       return ln;
     });

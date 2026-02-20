@@ -9,50 +9,70 @@ import {
   FiSliders,
 } from "react-icons/fi";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
+const PRES_API = import.meta.env.VITE_PRESENTATION_API;
+
 const STATUS = {
   loading: "loading",
   success: "success",
   error: "error",
 };
 
-const HealthCheck = () => {
-  const [statuses, setStatuses] = useState({
-    glitch: STATUS.loading,
-    psalms: STATUS.loading,
-    songs: STATUS.loading,
-    presentations: STATUS.loading,
-  });
+// Each card now carries its own url so the render loop can display it and
+// runChecks can read it directly — previously url was missing from every card,
+// causing the display to always show undefined.
+const healthCards = [
+  {
+    label: "API (ping)",
+    url: `${API_BASE}/ping`,
+    icon: <FiActivity size={28} className="text-indigo-600" />,
+    statusKey: "ping",
+  },
+  {
+    label: "Psalms API",
+    url: `${API_BASE}/psalms/1`,
+    icon: <FiBookOpen size={28} className="text-indigo-600" />,
+    statusKey: "psalms",
+  },
+  {
+    label: "Songs API",
+    url: `${API_BASE}/songs`,
+    icon: <FiMusic size={28} className="text-indigo-600" />,
+    statusKey: "songs",
+  },
+  {
+    label: "Presentations API",
+    url: `${PRES_API}/presentations/SamplePresentation/slides`,
+    icon: <FiSliders size={28} className="text-indigo-600" />,
+    statusKey: "presentations",
+  },
+];
 
+const HealthCheck = () => {
+  const initialStatuses = Object.fromEntries(
+    healthCards.map(({ statusKey }) => [statusKey, STATUS.loading])
+  );
+
+  const [statuses, setStatuses] = useState(initialStatuses);
   const [lastChecked, setLastChecked] = useState(null);
 
-  const checkEndpoint = async (label, url) => {
+  const checkEndpoint = async (statusKey, url) => {
     try {
       const res = await fetch(url);
       setStatuses((prev) => ({
         ...prev,
-        [label]: res.ok ? STATUS.success : STATUS.error,
+        [statusKey]: res.ok ? STATUS.success : STATUS.error,
       }));
     } catch {
-      setStatuses((prev) => ({ ...prev, [label]: STATUS.error }));
+      setStatuses((prev) => ({ ...prev, [statusKey]: STATUS.error }));
     }
   };
 
   const runChecks = () => {
-    setStatuses({
-      glitch: STATUS.loading,
-      psalms: STATUS.loading,
-      songs: STATUS.loading,
-      presentations: STATUS.loading,
-    });
-
-    checkEndpoint("glitch", "https://grey-gratis-ice.onrender.com/ping");
-    checkEndpoint("psalms", "https://grey-gratis-ice.onrender.com/psalms/1");
-    checkEndpoint("songs", "https://grey-gratis-ice.onrender.com/songs");
-    checkEndpoint(
-      "presentations",
-      "https://grey-gratis-ice.onrender.com/presentations/SamplePresentation/slides"
+    setStatuses(
+      Object.fromEntries(healthCards.map(({ statusKey }) => [statusKey, STATUS.loading]))
     );
-
+    healthCards.forEach(({ statusKey, url }) => checkEndpoint(statusKey, url));
     setLastChecked(new Date());
   };
 
@@ -67,29 +87,6 @@ const HealthCheck = () => {
       return <FiCheckCircle className="text-green-600" />;
     return <FiXCircle className="text-red-600" />;
   };
-
-  const healthCards = [
-    {
-      label: "Glitch API",
-      icon: <FiActivity size={28} className="text-indigo-600" />,
-      statusKey: "glitch",
-    },
-    {
-      label: "Psalms API",
-      icon: <FiBookOpen size={28} className="text-indigo-600" />,
-      statusKey: "psalms",
-    },
-    {
-      label: "Songs API",
-      icon: <FiMusic size={28} className="text-indigo-600" />,
-      statusKey: "songs",
-    },
-    {
-      label: "Presentations API",
-      icon: <FiSliders size={28} className="text-indigo-600" />,
-      statusKey: "presentations",
-    },
-  ];
 
   return (
     <div className="space-y-6">
