@@ -31,6 +31,7 @@ export default function App() {
             type="text"
             className="w-full border rounded px-4 py-2 focus:outline-none focus:ring"
             placeholder="Enter your name"
+            maxLength={50}
             value={inputName}
             onChange={(e) => setInputName(e.target.value)}
           />

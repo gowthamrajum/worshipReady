@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import useSlides from "../hooks/useSlides";
 import usePresentationSetup from "./usePresentationSetup";
 import useSlideHandlers from "./useSlideHandlers";
 import { useExportHandlers } from "./useExportHandlers";
 import { exportSlideCanvasAsImage } from "../utils/exportSlideCanvasAsImage";
-import usePersistentSlides from "../hooks/usePersistentSlides";
-import { FiDownload, FiFilm, FiAlertTriangle } from "react-icons/fi";
+import { FiDownload, FiFilm, FiLoader, FiTrash2, FiUpload, FiCheckCircle } from "react-icons/fi";
 import { generateZipWithPPTAndSession } from "../utils/generateZipWithPPTAndSession";
 import { loadSessionFile } from "../utils/loadSessionFromFile";
 import SongPreview from "./SongPreview";
@@ -16,7 +16,6 @@ import SlideEditControls from "./SlideEditControls";
 import CustomSlides from "./CustomSlides";
 import PsalmsPreview from "./PsalmsPreview";
 import PresentationPrompt from "./PresentationPrompt";
-import { FiLoader, FiTrash2, FiUpload, FiCheckCircle } from "react-icons/fi";
 import { downloadJSON } from "../utils/downloadJSON";
 
 const getSavedSessionMeta = () => {
@@ -36,11 +35,13 @@ const getSavedSessionMeta = () => {
 };
 
 const SlideComposer = () => {
-  const local = usePersistentSlides([]);
   const sessionMeta = getSavedSessionMeta();
 
-  const [presentationName, setPresentationName] = useState(local.presentationName || "");
-  const [showPrompt, setShowPrompt] = useState(!local.presentationName);
+  // No longer initialised from usePersistentSlides — that hook used a different
+  // localStorage key ("slide_composer_session" vs "slide-composer-session") so it
+  // never actually shared state with the main session restore logic below.
+  const [presentationName, setPresentationName] = useState("");
+  const [showPrompt, setShowPrompt] = useState(true);
   const [showResumePrompt, setShowResumePrompt] = useState(!!sessionMeta?.exists);
   const [inputValue, setInputValue] = useState("");
   const [dragMode, setDragMode] = useState("stanza");
@@ -50,11 +51,13 @@ const SlideComposer = () => {
   const [showSavedModal, setShowSavedModal] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState(null);
   const [showNameWarning, setShowNameWarning] = useState(false);
+
   const {
     slides,
     currentIndex,
     currentSlide,
     addSlide,
+    addMultipleSlides,
     setSlideLines,
     goToSlide,
     captureSlideImage,
@@ -83,7 +86,14 @@ const SlideComposer = () => {
   } = useSlideHandlers({
     slides,
     currentIndex,
-    slideOps: { addSlide, setSlideLines, setSlideEditMode, markSlideSaved, deleteSlide },
+    slideOps: {
+      addSlide,
+      addMultipleSlides,
+      setSlideLines,
+      setSlideEditMode,
+      markSlideSaved,
+      deleteSlide,
+    },
     presentationName,
   });
 
@@ -110,7 +120,7 @@ const SlideComposer = () => {
 
   const handleCreatePresentation = async () => {
     if (!inputValue.trim()) {
-      setShowNameWarning(true); // 🔥 trigger modal
+      setShowNameWarning(true);
       return;
     }
     const createdDateTime = new Date().toISOString();
@@ -121,32 +131,29 @@ const SlideComposer = () => {
         body: JSON.stringify({ presentationName: inputValue.trim(), createdDateTime }),
       });
       setPresentationName(inputValue.trim());
-      local.setPresentationName(inputValue.trim());
       setShowPrompt(false);
     } catch (err) {
       console.error("Failed to create presentation", err);
-      alert("Failed to create presentation.");
+      toast.error("Failed to create presentation. Please try again.");
     }
   };
 
-  const handleDuplicate = (index) => {  
+  const handleDuplicate = (index) => {
     duplicateSlide(index, (newIndex, newSlide) => {
-  
+
       goToSlide(newIndex); // Go to the new slide so the DOM gets updated
-  
+
       setTimeout(async () => {
         const ref = slideRefs.current[newIndex];
         if (!ref?.current) {
-          console.warn("⚠️ Slide ref not available yet for capture");
+          console.warn("Slide ref not available yet for capture");
           return;
         }
-  
-  
+
         const imageBase64 = await exportSlideCanvasAsImage(ref, `Slide-${newIndex + 1}`, false);
         const base64Data = imageBase64.replace(/^data:image\/png;base64,/, "");
         const finalOrder = getSlideOrder(newSlide.id);
-  
-  
+
         try {
           const response = await fetch(`${import.meta.env.VITE_PRESENTATION_API}/presentations/slide`, {
             method: "POST",
@@ -158,16 +165,16 @@ const SlideComposer = () => {
               slideData: base64Data,
             }),
           });
-  
+
           if (!response.ok) {
             const errText = await response.text();
-            console.error("❌ Failed to save slide (HTTP error):", response.status, errText);
+            console.error("Failed to save slide (HTTP error):", response.status, errText);
           } else {
             markSlideBackendSaved(newIndex);
             markSlideSaved(newIndex);
           }
         } catch (err) {
-          console.error("❌ Failed to save duplicated slide (fetch error):", err);
+          console.error("Failed to save duplicated slide (fetch error):", err);
         }
       }, 300); // Let DOM render before capturing
     });
@@ -176,17 +183,17 @@ const SlideComposer = () => {
   const handleLoadSessionFromFile = () => {
     loadSessionFile((session) => {
       if (!session?.slides || !Array.isArray(session.slides)) {
-        alert("Invalid session file.");
+        toast.error("Invalid session file.");
         return;
       }
-  
+
       restoreSlides(session.slides, session.currentIndex || 0);
       setPresentationName(session.presentationName || "Untitled");
       setShowPrompt(false);
       setShowResumePrompt(false);
       localStorage.setItem("slide-composer-session", JSON.stringify(session));
     });
-  }; 
+  };
 
   const saveAndDownloadSession = () => {
     const now = new Date();
@@ -197,25 +204,30 @@ const SlideComposer = () => {
       timestamp: now.toISOString(),
     };
     localStorage.setItem("slide-composer-session", JSON.stringify(sessionData));
-  
-    // 👇 Trigger the download
+
     const filename = `${presentationName || "presentation"}-session-${now.toISOString().slice(0, 19)}.json`;
     downloadJSON(sessionData, filename);
-  
+
     setLastSavedTime(now.toLocaleString());
     setShowSavedModal(true);
   };
 
+  // Restore session from localStorage on first mount.
   useEffect(() => {
     const saved = localStorage.getItem("slide-composer-session");
     if (saved) {
-      const session = JSON.parse(saved);
-      if (session.slides?.length > 0) {
-        restoreSlides(session.slides, session.currentIndex || 0);
-        setPresentationName(session.presentationName || "Untitled");
-        setShowPrompt(false);
+      try {
+        const session = JSON.parse(saved);
+        if (session.slides?.length > 0) {
+          restoreSlides(session.slides, session.currentIndex || 0);
+          setPresentationName(session.presentationName || "Untitled");
+          setShowPrompt(false);
+        }
+      } catch (err) {
+        console.warn("Failed to restore session:", err);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDelete = (index) => handleDeleteSlide(index);
@@ -288,11 +300,8 @@ const SlideComposer = () => {
 
       <div className="flex gap-6">
         <div className="w-1/3 h-[calc(100vh-160px)] overflow-y-auto pr-2 space-y-4">
-          {/* <SongSelector songs={songs} query={query} setQuery={setQuery} onSongSelect={fetchLyrics} /> */}
           <SongPreview lyrics={lyrics} dragMode={dragMode} onAddSlide={addSlide} />
-          <PsalmsPreview dragMode={dragMode} onAddPsalmSlides={(verses) =>
-            addPsalmSlides(verses, { addSlide, setSlideLines, setSlideEditMode, markSlideSaved })
-          } />
+          <PsalmsPreview dragMode={dragMode} onAddPsalmSlides={addPsalmSlides} />
           <CustomSlides />
         </div>
 
@@ -355,13 +364,14 @@ const SlideComposer = () => {
             }}
             onDelete={handleDelete}
             onReorder={(from, to) => {
-              reorderSlides(from, to); // 🔁 Local update
-            
-              // 🔄 Sync new order to backend
+              // Compute the new order from the current slides snapshot before
+              // scheduling the state update, so both operations use the same array.
               const updated = [...slides];
               const [moved] = updated.splice(from, 1);
               updated.splice(to, 0, moved);
-            
+
+              reorderSlides(from, to); // schedule local state update
+
               updated.forEach((slide, index) => {
                 fetch(`${import.meta.env.VITE_PRESENTATION_API}/presentations/update-order`, {
                   method: "PUT",
@@ -418,7 +428,7 @@ const SlideComposer = () => {
                 }, 1000);
               } catch (err) {
                 setIsPreparingZip(false);
-                alert("❌ Failed to generate ZIP. Please try again.");
+                toast.error("Failed to generate ZIP. Please try again.");
                 console.error("ZIP generation error:", err);
               }
             }}
@@ -518,14 +528,14 @@ const SlideComposer = () => {
               <button
               onClick={() => {
                 setShowSavedModal(false);
-                setShowPrompt(false);          // Don’t show create form immediately
-                setShowResumePrompt(true);     // ✅ Show resume modal again
+                setShowPrompt(false);
+                setShowResumePrompt(true);
               }}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
             >
               Back to Home
             </button>
-            
+
             </div>
           </div>
         </div>

@@ -21,33 +21,35 @@ const SlideSwitcher = ({
   const containerRef = useRef(null);
   const [previewIndex, setPreviewIndex] = useState(null);
 
-  let isDown = false;
-  let startX;
-  let scrollLeft;
+  // Use refs for drag-scroll mutable values so they survive re-renders without
+  // resetting (plain `let` variables inside the component body reset on every render).
+  const isDownRef = useRef(false);
+  const startXRef = useRef(0);
+  const scrollLeftRef = useRef(0);
 
   const handleMouseDown = (e) => {
-    isDown = true;
-    startX = e.pageX - containerRef.current.offsetLeft;
-    scrollLeft = containerRef.current.scrollLeft;
+    isDownRef.current = true;
+    startXRef.current = e.pageX - containerRef.current.offsetLeft;
+    scrollLeftRef.current = containerRef.current.scrollLeft;
     containerRef.current.classList.add("cursor-grabbing");
   };
 
   const handleMouseLeave = () => {
-    isDown = false;
+    isDownRef.current = false;
     containerRef.current.classList.remove("cursor-grabbing");
   };
 
   const handleMouseUp = () => {
-    isDown = false;
+    isDownRef.current = false;
     containerRef.current.classList.remove("cursor-grabbing");
   };
 
   const handleMouseMove = (e) => {
-    if (!isDown) return;
+    if (!isDownRef.current) return;
     e.preventDefault();
     const x = e.pageX - containerRef.current.offsetLeft;
-    const walk = (x - startX) * 1.5;
-    containerRef.current.scrollLeft = scrollLeft - walk;
+    const walk = (x - startXRef.current) * 1.5;
+    containerRef.current.scrollLeft = scrollLeftRef.current - walk;
   };
 
   return (
@@ -83,7 +85,7 @@ const SlideSwitcher = ({
         </button>
       </div>
 
-      {/* Slide List - No Drag/Drop */}
+      {/* Slide List */}
       <div
         ref={containerRef}
         onMouseDown={handleMouseDown}

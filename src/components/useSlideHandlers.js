@@ -1,17 +1,15 @@
 import axios from "axios";
 import React, { useRef, useEffect } from "react";
 
-const PRESENTATION_BASE = import.meta.env.VITE_PRESENTATION_API;
-
 export default function useSlideHandlers({ slides, currentIndex, slideOps, presentationName }) {
   const slideRefs = useRef([]);
 
   const {
-    addSlide,
+    addMultipleSlides,
     setSlideLines,
     setSlideEditMode,
     markSlideSaved,
-    deleteSlide, // ✅ FIXED: make sure this is destructured
+    deleteSlide,
   } = slideOps;
 
   useEffect(() => {
@@ -35,34 +33,31 @@ export default function useSlideHandlers({ slides, currentIndex, slideOps, prese
       alert("Missing presentation name or slide ID.");
       return;
     }
-  
-    // ✅ Skip backend call if slide was never saved
+
+    // Skip backend call if slide was never saved to backend
     if (!slide.savedToBackend) {
-      console.log("🗑️ Deleting unsaved slide locally (no backend call)");
+      console.log("Deleting unsaved slide locally (no backend call)");
       deleteSlide(index);
       return;
     }
-  
+
     try {
-      console.log("🗑️ Sending DELETE request for slide: ", slide.id);
-      console.log("URL ->", `${import.meta.env.VITE_PRESENTATION_API}/presentations/slide/${presentationName}/${slide.id}`)
-      await axios.delete(`${import.meta.env.VITE_PRESENTATION_API}/presentations/slide/${presentationName}/${slide.id}`);
-      console.log("✅ Slide deleted from backend");
+      await axios.delete(
+        `${import.meta.env.VITE_PRESENTATION_API}/presentations/slide/${presentationName}/${slide.id}`
+      );
+      console.log("Slide deleted from backend");
       deleteSlide(index);
     } catch (err) {
-      console.error("❌ Failed to delete slide:", err);
+      console.error("Failed to delete slide:", err);
       alert("Could not delete slide from the server.");
     }
   };
 
-// inside useSlideHandlers.js
-const addPsalmSlides = (slideLinesArray) => {
-  slideLinesArray.forEach((lines) => {
-    const index = addSlide(lines);
-    setSlideEditMode(index, "stanza");
-    markSlideSaved(index);
-  });
-};
+  // Uses addMultipleSlides to batch-add all slides in a single state update,
+  // avoiding the stale-index bug that occurred when addSlide was called in a loop.
+  const addPsalmSlides = (slideLinesArray) => {
+    addMultipleSlides(slideLinesArray);
+  };
 
   return {
     slideRefs,
