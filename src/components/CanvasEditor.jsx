@@ -160,10 +160,20 @@ const CanvasEditor = ({
       const fontSize = fitStanzaFontSize(lines, maxTextWidth, maxTextHeight);
       const spacing  = fontSize * 1.2;
 
+      // Clamp drop y so the entire stanza stays within the canvas.
+      // Each line is centered at its y (transform: translate(-50%,-50%)),
+      // so the topmost edge is y - fontSize/2 and the bottom of the last
+      // line is y + (N-1)*spacing + fontSize/2.
+      const totalStanzaSpan = (lines.length - 1) * spacing;
+      const clampedY = Math.max(
+        fontSize / 2,
+        Math.min(y, container.clientHeight - totalStanzaSpan - fontSize / 2)
+      );
+
       const dropped = lines.map((text, i) => ({
         text,
         x,
-        y: y + i * spacing,
+        y: clampedY + i * spacing,
         fontSize,
         lineSpacing: spacing,
         id: generateId(),
