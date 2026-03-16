@@ -19,6 +19,10 @@ const MAX_TEXT_HEIGHT   = SLIDE_HEIGHT * 0.9; // processDrop: clientHeight * 0.9
 const MIN_FONT          = 14;                // allow small font for large stanzas so text never overflows
 const MAX_FONT          = 70;                // matches CanvasToolbar MAX_FONT_SIZE
 const LINE_HEIGHT_FACTOR = 1.4;             // 1.4× gives enough room for Telugu ascenders/descenders
+const LINE_HEIGHT_FACTOR = 1.5;             // used only for vertical font-size cap calculation
+const TARGET_FILL        = 0.85;            // dynamic spacing fills 85% of slide height
+const MIN_SP_FACTOR      = 1.4;            // minimum spacing: 1.4× fontSize
+const MAX_SP_FACTOR      = 2.5;            // maximum spacing: 2.5× fontSize
 
 // Reuse a single offscreen canvas (same pattern as CanvasEditor.getMeasureCtx).
 let _measureCtx = null;
@@ -126,7 +130,15 @@ export function buildSongSlideLines(lines = []) {
   if (!filtered.length) return [];
 
   const fontSize = fitStanzaFontSize(filtered);
-  const spacing  = Math.max(20, Math.round(fontSize * LINE_HEIGHT_FACTOR));
+
+  // Dynamic spacing: fill TARGET_FILL of slide height, clamped to [1.4×, 2.5×] fontSize
+  const calcSpacing = (fs, n) => {
+    if (n <= 1) return fs * 1.5;
+    const targetH = SLIDE_HEIGHT * TARGET_FILL;
+    const dynamic = (targetH - fs) / (n - 1);
+    return Math.min(fs * MAX_SP_FACTOR, Math.max(fs * MIN_SP_FACTOR, dynamic));
+  };
+  const spacing = calcSpacing(fontSize, filtered.length);
 
   const blockH  = (filtered.length - 1) * spacing + fontSize;
   const startY  = (SLIDE_HEIGHT - blockH) / 2 + fontSize / 2;
