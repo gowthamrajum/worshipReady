@@ -17,11 +17,12 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
   const [expandedStanzas, setExpandedStanzas] = useState({});
 
   // ── Arrange-mode state ──────────────────────────────────────────────────────
-  const [selection, setSelection]         = useState([]);     // ordered stanza IDs
-  const [recurringId, setRecurringId]     = useState(null);   // only one allowed
-  const [recurringLines, setRecurringLines] = useState(new Set()); // indices of chosen lines
-  const [recurringFirst, setRecurringFirst] = useState(false);    // prepend recurring as slide 1
-  const [lastBatchIds, setLastBatchIds] = useState([]);           // for undo
+  const [selection, setSelection]             = useState([]);     // ordered stanza IDs
+  const [recurringId, setRecurringId]         = useState(null);   // only one allowed
+  const [recurringLines, setRecurringLines]   = useState(new Set()); // indices of chosen lines
+  const [recurringRepeatable, setRecurringRepeatable] = useState(true);  // interleave selected lines
+  const [recurringWholeFirst, setRecurringWholeFirst] = useState(false); // prepend with all lines
+  const [lastBatchIds, setLastBatchIds] = useState([]);                  // for undo
 
   // ── Song list ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -55,7 +56,8 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
       setSelection([]);
       setRecurringId(null);
       setRecurringLines(new Set());
-      setRecurringFirst(false);
+      setRecurringRepeatable(true);
+      setRecurringWholeFirst(false);
       setLastBatchIds([]);
     } catch (err) {
       console.error("Failed to load lyrics:", err);
@@ -70,7 +72,8 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
     setSelection([]);
     setRecurringId(null);
     setRecurringLines(new Set());
-    setRecurringFirst(false);
+    setRecurringRepeatable(true);
+    setRecurringWholeFirst(false);
     setLastBatchIds([]);
   };
 
