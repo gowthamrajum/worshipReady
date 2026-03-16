@@ -143,19 +143,25 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
   };
 
   /**
-   * Final slide order:
-   * If a recurring stanza is set it is interleaved after every non-recurring stanza.
-   * When recurringFirst is true the recurring stanza is also prepended as slide 1.
+   * Final slide order. Each entry is { id, full } where full=true means use
+   * all stanza lines (for the "Whole Stanza for First Slide" option).
    */
   const getFinalOrder = () => {
-    if (!recurringId || !selection.includes(recurringId)) return selection;
+    if (!recurringId || !selection.includes(recurringId)) {
+      return selection.map((id) => ({ id, full: false }));
+    }
     const nonRecurring = selection.filter((id) => id !== recurringId);
-    if (!nonRecurring.length) return selection;
-    const result = recurringFirst ? [recurringId] : [];
-    nonRecurring.forEach((id) => {
-      result.push(id);
-      result.push(recurringId);
-    });
+    if (!nonRecurring.length) return selection.map((id) => ({ id, full: false }));
+    const result = [];
+    if (recurringWholeFirst) result.push({ id: recurringId, full: true });
+    if (recurringRepeatable) {
+      nonRecurring.forEach((id) => {
+        result.push({ id, full: false });
+        result.push({ id: recurringId, full: false });
+      });
+    } else {
+      nonRecurring.forEach((id) => result.push({ id, full: false }));
+    }
     return result;
   };
 
@@ -172,14 +178,14 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
     await ensureFontLoaded();
 
     const slideLinesArray = order
-      .map((id) => {
+      .map(({ id, full }) => {
         const stanza = stanzaById[id];
         if (!stanza) return null;
 
         const allLines = [...stanza.telugu, ...stanza.english];
 
-        // For the recurring stanza, only use the lines the user has selected
-        if (id === recurringId && recurringLines.size > 0) {
+        // Recurring stanza with selected-line subset (unless full=true for first slide)
+        if (id === recurringId && !full && recurringLines.size > 0) {
           const chosenLines = allLines.filter((_, i) => recurringLines.has(i));
           return buildSongSlideLines(chosenLines);
         }
@@ -564,20 +570,36 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
                                 {recurringLines.size} / {allLines.length} lines selected
                               </p>
 
-                              {/* First-slide toggle */}
-                              <div
-                                onClick={(e) => { e.stopPropagation(); setRecurringFirst((v) => !v); }}
-                                className="flex items-center gap-2 cursor-pointer select-none mt-2 pt-2 border-t border-orange-200"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={recurringFirst}
-                                  readOnly
-                                  className="accent-orange-500 pointer-events-none"
-                                />
-                                <span className="text-xs text-orange-700 font-medium">
-                                  Also use as first slide
-                                </span>
+                              {/* Two options: Repeatable + Whole Stanza for First Slide */}
+                              <div className="mt-2 pt-2 border-t border-orange-200 space-y-1.5">
+                                <div
+                                  onClick={(e) => { e.stopPropagation(); setRecurringRepeatable((v) => !v); }}
+                                  className="flex items-center gap-2 cursor-pointer select-none"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={recurringRepeatable}
+                                    readOnly
+                                    className="accent-orange-500 pointer-events-none"
+                                  />
+                                  <span className="text-xs text-orange-700 font-medium">
+                                    Repeatable
+                                  </span>
+                                </div>
+                                <div
+                                  onClick={(e) => { e.stopPropagation(); setRecurringWholeFirst((v) => !v); }}
+                                  className="flex items-center gap-2 cursor-pointer select-none"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={recurringWholeFirst}
+                                    readOnly
+                                    className="accent-orange-500 pointer-events-none"
+                                  />
+                                  <span className="text-xs text-orange-700 font-medium">
+                                    Whole Stanza for First Slide
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -588,7 +610,8 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
 
                   {recurringId && (
                     <p className="text-xs text-orange-500 mt-1.5">
-                      ↻ Recurring slide appears {recurringFirst ? "first, then " : ""}after every other stanza.
+                      ↻{recurringWholeFirst ? " Full stanza as slide 1." : ""}
+                      {recurringRepeatable ? " Selected lines repeat after every stanza." : ""}
                     </p>
                   )}
                 </div>
@@ -664,7 +687,7 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
                       3. Final Slides — {finalOrder.length} total
                     </p>
                     <div className="bg-gray-50 border rounded p-2 space-y-0.5 max-h-36 overflow-y-auto">
-                      {finalOrder.map((id, idx) => {
+                      {finalOrder.map(({ id, full }, idx) => {
                         const stanza = stanzaById[id];
                         const isRecurring = recurringId === id;
                         return (
@@ -683,7 +706,7 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
                               }
                             >
                               {stanza?.label}
-                              {isRecurring && " ↻"}
+                              {isRecurring && (full ? " ↻ (full)" : " ↻")}
                             </span>
                           </div>
                         );
