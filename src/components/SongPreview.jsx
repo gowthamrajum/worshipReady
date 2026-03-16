@@ -3,7 +3,7 @@ import axios from "axios";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { FiChevronDown, FiMove, FiX, FiArrowRight, FiRotateCcw } from "react-icons/fi";
 import { HiMusicNote, HiOutlineDocumentText } from "react-icons/hi";
-import { buildSongSlideLines } from "../utils/buildSongSlideLines";
+import { buildSongSlideLines, ensureFontLoaded } from "../utils/buildSongSlideLines";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
@@ -21,7 +21,7 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
   const [recurringId, setRecurringId]     = useState(null);   // only one allowed
   const [recurringLines, setRecurringLines] = useState(new Set()); // indices of chosen lines
   const [recurringFirst, setRecurringFirst] = useState(false);    // prepend recurring as slide 1
-  const [lastBatchCount, setLastBatchCount] = useState(0);        // for undo
+  const [lastBatchIds, setLastBatchIds] = useState([]);           // for undo
 
   // ── Song list ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -56,7 +56,7 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
       setRecurringId(null);
       setRecurringLines(new Set());
       setRecurringFirst(false);
-      setLastBatchCount(0);
+      setLastBatchIds([]);
     } catch (err) {
       console.error("Failed to load lyrics:", err);
     }
@@ -71,7 +71,7 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
     setRecurringId(null);
     setRecurringLines(new Set());
     setRecurringFirst(false);
-    setLastBatchCount(0);
+    setLastBatchIds([]);
   };
 
   const filteredSongs = songs.filter((s) =>
@@ -162,9 +162,14 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
   const stanzaById = Object.fromEntries(lyrics.map((l) => [l.id, l]));
   const finalOrder = getFinalOrder();
 
-  const handleMoveToCanvas = () => {
+  const handleMoveToCanvas = async () => {
     const order = getFinalOrder();
     if (!order.length) return;
+
+    // Ensure the Anek Telugu font is loaded before measuring so the offscreen
+    // canvas uses real glyph metrics, not a fallback (which causes wrong font
+    // size → lines overlap or appear off-centre on the canvas).
+    await ensureFontLoaded();
 
     const slideLinesArray = order
       .map((id) => {
@@ -184,14 +189,31 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
       .filter(Boolean);
 
     if (slideLinesArray.length > 0) {
-      onAddMultipleSlides?.(slideLinesArray);
-      setLastBatchCount(slideLinesArray.length);
+      const ids = onAddMultipleSlides?.(slideLinesArray) ?? [];
+      setLastBatchIds(ids);
+    }
+  };
+
+  /** Move every stanza (in original song order) to the canvas at once. */
+  const handleMoveAll = async () => {
+    if (!lyrics.length) return;
+    await ensureFontLoaded();
+    const slideLinesArray = lyrics
+      .map((stanza) => {
+        const allLines = [...stanza.telugu, ...stanza.english];
+        return buildSongSlideLines(allLines);
+      })
+      .filter((lines) => lines.length > 0);
+
+    if (slideLinesArray.length > 0) {
+      const ids = onAddMultipleSlides?.(slideLinesArray) ?? [];
+      setLastBatchIds(ids);
     }
   };
 
   const handleUndo = () => {
-    onUndoLastBatch?.(lastBatchCount);
-    setLastBatchCount(0);
+    onUndoLastBatch?.(lastBatchIds);
+    setLastBatchIds([]);
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -289,6 +311,23 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
             {/* ── DRAG MODE ───────────────────────────────────────────────── */}
             {mode === "drag" && (
               <div className="space-y-2">
+                {/* Quick-action: send every stanza to the canvas in one click */}
+                <button
+                  onClick={handleMoveAll}
+                  className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-600 text-white text-sm rounded font-semibold hover:bg-indigo-700 transition-colors"
+                >
+                  <FiArrowRight size={14} />
+                  Move All Stanzas ({lyrics.length} slides)
+                </button>
+                {lastBatchIds.length > 0 && (
+                  <button
+                    onClick={handleUndo}
+                    className="w-full flex items-center justify-center gap-2 py-1.5 bg-red-50 text-red-600 border border-red-300 text-sm rounded font-medium hover:bg-red-100 transition-colors"
+                  >
+                    <FiRotateCcw size={13} />
+                    Undo Last Move ({lastBatchIds.length} slides removed)
+                  </button>
+                )}
                 {lyrics.map((stanza) => {
                   const allLines = [...stanza.telugu, ...stanza.english];
                   return (
@@ -395,9 +434,27 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
 
                 {/* ── Step 1: Select stanzas ─────────────────────────────── */}
                 <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
-                    1. Select Stanzas
-                  </p>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                      1. Select Stanzas
+                    </p>
+                    <button
+                      onClick={() => {
+                        const allIds = lyrics.map((l) => l.id);
+                        const allSelected = allIds.every((id) => selection.includes(id));
+                        if (allSelected) {
+                          setSelection([]);
+                          setRecurringId(null);
+                          setRecurringLines(new Set());
+                        } else {
+                          setSelection(allIds);
+                        }
+                      }}
+                      className="text-xs text-indigo-600 underline hover:text-indigo-800"
+                    >
+                      {lyrics.every((l) => selection.includes(l.id)) ? "Deselect All" : "Select All"}
+                    </button>
+                  </div>
                   <div className="space-y-1">
                     {lyrics.map((stanza) => {
                       const allLines = [...stanza.telugu, ...stanza.english];
@@ -646,13 +703,13 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
                       Move My Selection ({finalOrder.length} slides)
                     </button>
 
-                    {lastBatchCount > 0 && (
+                    {lastBatchIds.length > 0 && (
                       <button
                         onClick={handleUndo}
                         className="w-full flex items-center justify-center gap-2 py-2 bg-red-50 text-red-600 border border-red-300 rounded font-medium hover:bg-red-100 transition-colors"
                       >
                         <FiRotateCcw size={14} />
-                        Undo Last Move ({lastBatchCount} slides removed)
+                        Undo Last Move ({lastBatchIds.length} slides removed)
                       </button>
                     )}
                   </div>

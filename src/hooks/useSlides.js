@@ -42,20 +42,41 @@ const useSlides = () => {
   };
 
   // Adds multiple slides at once in a single state update, each with editMode "stanza".
-  // Avoids the stale-index bug that occurs when addSlide is called in a loop.
+  // Inserts them immediately AFTER the current slide (not at the end) so new slides
+  // appear in context rather than at the far right of the slide strip.
+  // Returns the array of newly-created slide IDs so the caller can track the batch for undo.
   const addMultipleSlides = (slideLinesArray) => {
-    if (!slideLinesArray.length) return;
+    if (!slideLinesArray.length) return [];
+    const insertAt = currentIndex + 1;
+    // Generate IDs before the state updater so we can return them synchronously.
+    const newSlides = slideLinesArray.map((lines) => ({
+      id: generateId(),
+      lines,
+      editMode: "stanza",
+      unsaved: false,
+      savedToBackend: false,
+    }));
     setSlides((prev) => {
-      const newSlides = slideLinesArray.map((lines) => ({
-        id: generateId(),
-        lines,
-        editMode: "stanza",
-        unsaved: false,
-        savedToBackend: false,
-      }));
-      return [...prev, ...newSlides];
+      const updated = [...prev];
+      updated.splice(insertAt, 0, ...newSlides);
+      return updated;
     });
-    setCurrentIndex((prev) => prev + slideLinesArray.length);
+    setCurrentIndex(insertAt);
+    return newSlides.map((s) => s.id);
+  };
+
+  // Removes slides by their IDs — used to undo a batch "Move My Selection" that may
+  // have been inserted in the middle of the list (not necessarily at the end).
+  const removeSlidesByIds = (ids) => {
+    if (!ids?.length) return;
+    setSlides((prev) => {
+      const filtered = prev.filter((s) => !ids.includes(s.id));
+      if (filtered.length === 0) {
+        return [{ id: generateId(), lines: [], editMode: null, unsaved: false, savedToBackend: false }];
+      }
+      return filtered;
+    });
+    setCurrentIndex((prev) => Math.max(0, prev - ids.length));
   };
 
   const duplicateSlide = (index, callback) => {
@@ -152,6 +173,9 @@ const useSlides = () => {
     if (!canvasRef?.current) return;
     try {
       const clone = canvasRef.current.cloneNode(true);
+      // Strip any CSS scale transform so html2canvas captures the full 960×540
+      // logical canvas, not the visually-shrunk version.
+      clone.style.transform = "none";
       const container = document.createElement("div");
       container.style.position = "absolute";
       container.style.top = "-9999px";
@@ -249,6 +273,7 @@ const useSlides = () => {
     clearSlides,
     restoreSlides,
     removeLastNSlides,
+    removeSlidesByIds,
   };
 };
 
