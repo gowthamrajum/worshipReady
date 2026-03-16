@@ -54,7 +54,7 @@ function fitStanzaFontSize(
   lines,
   maxWidth,
   maxHeight,
-  lineHeightFactor = 1.2
+  lineHeightFactor = 1.5
 ) {
   // horizontal constraint per line
   const horizSizes = lines.map((t) => fitLineToWidth(t, maxWidth));
@@ -67,6 +67,9 @@ function fitStanzaFontSize(
 
   return Math.min(fontHoriz, maxFontVert);
 }
+
+const CANVAS_W = 960;
+const CANVAS_H = 540;
 
 const CanvasEditor = ({
   slides,
@@ -85,8 +88,25 @@ const CanvasEditor = ({
   const [dragInfo, setDragInfo]         = useState(null);
   const [editingId, setEditingId]       = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [canvasScale, setCanvasScale]   = useState(1);
+  const canvasScaleRef = useRef(1);
   const internalRef = useRef(null);
+  const outerRef    = useRef(null);
   const pendingDrop = useRef(null);
+
+  // Scale the 960×540 canvas to fill the available width of its container.
+  useEffect(() => {
+    const outer = outerRef.current;
+    if (!outer) return;
+    const obs = new ResizeObserver(([entry]) => {
+      const w = entry.contentRect.width;
+      const s = Math.min(1, w / CANVAS_W);
+      canvasScaleRef.current = s;
+      setCanvasScale(s);
+    });
+    obs.observe(outer);
+    return () => obs.disconnect();
+  }, []);
 
   // keep local canvasLines in sync with slides[currentIndex]
   useEffect(() => {
@@ -125,8 +145,9 @@ const CanvasEditor = ({
   const processDrop = (e, parsed) => {
     const container     = internalRef.current;
     const { left, top } = container.getBoundingClientRect();
-    const x = e.pageX - left - window.scrollX;
-    const y = e.pageY - top  - window.scrollY;
+    const sc = canvasScaleRef.current;
+    const x = (e.pageX - left - window.scrollX) / sc;
+    const y = (e.pageY - top  - window.scrollY) / sc;
 
     // maxTextWidth matches the element's width: "800px" so text never overflows its container.
     const MAX_FONT      = 70;
@@ -138,7 +159,7 @@ const CanvasEditor = ({
 
     if (parsed.type === "line") {
       const fontSize = Math.min(fitLineToWidth(parsed.text, maxTextWidth), MAX_FONT);
-      const spacing  = fontSize * 1.2;
+      const spacing  = fontSize * 1.4;
       const clampedY = Math.max(fontSize / 2, Math.min(y, container.clientHeight - fontSize / 2));
 
       const newLine = {
@@ -162,30 +183,44 @@ const CanvasEditor = ({
 
       // Use the drag data's explicit fontSize/lineSpacing (e.g. from CustomSlides)
       // if the full stanza fits within the canvas; otherwise auto-calculate.
+      // Compute spacing dynamically so the stanza fills ~85% of the canvas
+      // height, giving natural breathing room regardless of line count.
+      // Clamp between 1.4× (minimum legible) and 2.5× (maximum for few lines).
+      const STANZA_SPACING = 1.5; // used only for font-size calculation
+      const TARGET_FILL    = 0.85;
+      const MIN_SP_FACTOR  = 1.4;
+      const MAX_SP_FACTOR  = 2.5;
+
+      const calcSpacing = (fs, n) => {
+        if (n <= 1) return fs * 1.5;
+        const targetH = container.clientHeight * TARGET_FILL;
+        const dynamic = (targetH - fs) / (n - 1);
+        return Math.min(fs * MAX_SP_FACTOR, Math.max(fs * MIN_SP_FACTOR, dynamic));
+      };
+
       let fontSize, spacing;
       if (parsed.fontSize != null) {
-        const sp     = parsed.lineSpacing ?? (parsed.fontSize * 1.2);
+        const sp     = parsed.lineSpacing ?? calcSpacing(parsed.fontSize, lines.length);
         const totalH = (lines.length - 1) * sp + parsed.fontSize;
         if (totalH <= container.clientHeight) {
           fontSize = parsed.fontSize;
-          spacing  = sp;
+          spacing  = calcSpacing(fontSize, lines.length);
         } else {
-          fontSize = Math.min(fitStanzaFontSize(lines, maxTextWidth, maxTextHeight), MAX_FONT);
-          spacing  = fontSize * 1.2;
+          fontSize = Math.min(fitStanzaFontSize(lines, maxTextWidth, maxTextHeight, STANZA_SPACING), MAX_FONT);
+          spacing  = calcSpacing(fontSize, lines.length);
         }
       } else {
-        fontSize = Math.min(fitStanzaFontSize(lines, maxTextWidth, maxTextHeight), MAX_FONT);
-        spacing  = fontSize * 1.2;
+        fontSize = Math.min(fitStanzaFontSize(lines, maxTextWidth, maxTextHeight, STANZA_SPACING), MAX_FONT);
+        spacing  = calcSpacing(fontSize, lines.length);
       }
 
-      // Clamp drop y so the entire stanza stays within the canvas.
-      // Each line is centered at its y (transform: translate(-50%,-50%)),
-      // so the topmost edge is y - fontSize/2 and the bottom of the last
-      // line is y + (N-1)*spacing + fontSize/2.
+      // Vertically center the stanza on the canvas so dynamic spacing fills
+      // the slide evenly top-to-bottom with no large empty patches.
       const totalStanzaSpan = (lines.length - 1) * spacing;
+      const totalHeight     = totalStanzaSpan + fontSize;
       const clampedY = Math.max(
         fontSize / 2,
-        Math.min(y, container.clientHeight - totalStanzaSpan - fontSize / 2)
+        (container.clientHeight - totalHeight) / 2 + fontSize / 2
       );
 
       const dropped = lines.map((text, i) => ({
@@ -253,10 +288,11 @@ const CanvasEditor = ({
       }
     });
 
+    const sc = canvasScaleRef.current;
     setDragInfo({
       index: idx,
-      startX: e.clientX - rect.left,
-      startY: e.clientY - rect.top,
+      startX: (e.clientX - rect.left) / sc,
+      startY: (e.clientY - rect.top) / sc,
       initialPositions,
     });
   };
@@ -264,8 +300,9 @@ const CanvasEditor = ({
   const handleMouseMove = (e) => {
     if (!dragInfo) return;
     const rect = internalRef.current.getBoundingClientRect();
-    const dx = (e.clientX - rect.left) - dragInfo.startX;
-    const dy = (e.clientY - rect.top)  - dragInfo.startY;
+    const sc = canvasScaleRef.current;
+    const dx = ((e.clientX - rect.left) / sc) - dragInfo.startX;
+    const dy = ((e.clientY - rect.top)  / sc) - dragInfo.startY;
 
     // Apply delta to each selected line's initial (mousedown) position so that
     // cumulative rounding errors and stale React state cannot cause drift.
@@ -289,10 +326,19 @@ const CanvasEditor = ({
   //-------------- R E N D E R  -----------------
   return (
     <div
-      className="relative w-full h-full flex justify-center items-center bg-gray-100"
+      ref={outerRef}
+      className="relative w-full flex justify-center items-start bg-gray-100"
+      style={{ height: `${CANVAS_H * canvasScale}px` }}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
+      {/* Scale wrapper — shrinks 960×540 to fit the available panel width */}
+      <div style={{
+        width: `${CANVAS_W * canvasScale}px`,
+        height: `${CANVAS_H * canvasScale}px`,
+        flexShrink: 0,
+        overflow: "hidden",
+      }}>
       <div
         ref={(el) => {
           internalRef.current = el;
@@ -301,7 +347,13 @@ const CanvasEditor = ({
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
         className="relative shadow-lg border"
-        style={{ width: "960px", height: "540px", backgroundColor: "#4b5c47" }}
+        style={{
+          width: "960px",
+          height: "540px",
+          backgroundColor: "#4b5c47",
+          transform: `scale(${canvasScale})`,
+          transformOrigin: "top left",
+        }}
       >
         {canvasLines.map((line, idx) => (
           <div
@@ -326,15 +378,17 @@ const CanvasEditor = ({
               selectedIds.includes(line.id) ? "border border-yellow-300" : ""
             }`}
             style={{
-              left:      `${line.x}px`,
-              top:       `${line.y}px`,
-              fontSize:  `${line.fontSize}px`,
-              fontFamily:"'Anek Telugu', sans-serif",
-              textAlign: line.textAlign || "center",
-              transform: "translate(-50%, -50%)",
-              width:     "800px",
-              cursor:    "pointer",
-              lineHeight: 1, // actual line-height controlled by y + spacing
+              left:       `${line.x}px`,
+              top:        `${line.y}px`,
+              fontSize:   `${line.fontSize}px`,
+              fontFamily: "'Anek Telugu', sans-serif",
+              textAlign:  line.textAlign || "center",
+              transform:  "translate(-50%, -50%)",
+              width:      "800px",
+              cursor:     "pointer",
+              lineHeight: 1,          // element height = fontSize (used by translate(-50%,-50%))
+              whiteSpace: "nowrap",   // prevent wrapping that throws off centering
+              overflow:   "visible",  // let Telugu glyphs render beyond the line box
             }}
           >
             {editingId === line.id ? (
@@ -370,6 +424,7 @@ const CanvasEditor = ({
           </div>
         ))}
       </div>
+      </div>{/* end scale wrapper */}
 
       <CanvasToolbar
         canvasLines={canvasLines}

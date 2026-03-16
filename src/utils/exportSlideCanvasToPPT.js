@@ -39,14 +39,17 @@ export async function exportSlideCanvasAsImage(canvasRef, title = "Worship Slide
 
     // STEP 4: Add image to PowerPoint
     const pptx = new pptxgen();
+    // Match the 16:9 canvas so the image fills the slide completely.
+    pptx.defineLayout({ name: "CANVAS_16x9", width: 10, height: 5.625 });
+    pptx.layout = "CANVAS_16x9";
     const slide = pptx.addSlide();
 
     slide.addImage({
       data: dataUrl,
       x: 0,
       y: 0,
-      w: 10,      // Full slide width
-      h: 5.625,   // 16:9 slide ratio
+      w: 10,
+      h: 5.625,
     });
 
     await pptx.writeFile(`${title}.pptx`);

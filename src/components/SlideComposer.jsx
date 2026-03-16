@@ -70,6 +70,7 @@ const SlideComposer = () => {
     restoreSlides,
     clearSlides,
     removeLastNSlides,
+    removeSlidesByIds,
   } = useSlides();
 
   const {
@@ -304,7 +305,7 @@ const SlideComposer = () => {
           <SongPreview
             dragMode={dragMode}
             onAddMultipleSlides={addMultipleSlides}
-            onUndoLastBatch={removeLastNSlides}
+            onUndoLastBatch={removeSlidesByIds}
           />
           <PsalmsPreview dragMode={dragMode} onAddPsalmSlides={addPsalmSlides} />
           <CustomSlides />

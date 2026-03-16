@@ -16,9 +16,12 @@ const SLIDE_HEIGHT      = 540;
 const FONT_FAMILY       = "'Anek Telugu', sans-serif";
 const MAX_TEXT_WIDTH    = 800;               // CanvasEditor hard-coded element width
 const MAX_TEXT_HEIGHT   = SLIDE_HEIGHT * 0.9; // processDrop: clientHeight * 0.9
-const MIN_FONT          = 25;                // matches CanvasToolbar MIN_FONT_SIZE
+const MIN_FONT          = 14;                // allow small font for large stanzas so text never overflows
 const MAX_FONT          = 70;                // matches CanvasToolbar MAX_FONT_SIZE
-const LINE_HEIGHT_FACTOR = 1.2;             // matches fitStanzaFontSize default
+const LINE_HEIGHT_FACTOR = 1.5;             // used only for vertical font-size cap calculation
+const TARGET_FILL        = 0.85;            // dynamic spacing fills 85% of slide height
+const MIN_SP_FACTOR      = 1.4;            // minimum spacing: 1.4× fontSize
+const MAX_SP_FACTOR      = 2.5;            // maximum spacing: 2.5× fontSize
 
 // Reuse a single offscreen canvas (same pattern as CanvasEditor.getMeasureCtx).
 let _measureCtx = null;
@@ -68,15 +71,33 @@ function fitLineToWidth(text, maxWidth) {
 
 /**
  * Identical to CanvasEditor.fitStanzaFontSize.
- * Returns the largest font (clamped to [MIN_FONT, MAX_FONT]) where every line
- * fits horizontally AND the full block fits vertically (0.9 safety margin).
+ * Returns the largest font (capped at MAX_FONT) where every line fits
+ * horizontally AND the full block fits vertically (0.9 safety margin).
+ * No lower clamp — the binary search already enforces MIN_FONT as its floor,
+ * and applying an additional minimum here would cause long lines to overflow
+ * the 800 px element width.
  */
 function fitStanzaFontSize(lines) {
   const horizMin   = Math.min(...lines.map((t) => fitLineToWidth(t, MAX_TEXT_WIDTH)));
   const vertMax    = Math.floor((MAX_TEXT_HEIGHT * 0.9) / (lines.length * LINE_HEIGHT_FACTOR));
-  // Clamp to user-specified limits
   return Math.min(horizMin, vertMax, MAX_FONT);
-  // Note: fitLineToWidth already returns ≥ MIN_FONT, so no lower clamp needed.
+}
+
+/**
+ * Ensure 'Anek Telugu' is loaded in the browser font cache before measuring.
+ * Call this (await it) before the first buildSongSlideLines call so that the
+ * offscreen canvas uses the real font metrics, not a fallback glyph.
+ *
+ * Safe to call multiple times — resolves instantly once the font is cached.
+ */
+export async function ensureFontLoaded() {
+  try {
+    await document.fonts.load(`${MIN_FONT}px ${FONT_FAMILY}`);
+    await document.fonts.load(`${MAX_FONT}px ${FONT_FAMILY}`);
+    primeFontCache();
+  } catch {
+    // non-browser environment or font load failure — continue best-effort
+  }
 }
 
 let _uid = 0;
@@ -108,7 +129,15 @@ export function buildSongSlideLines(lines = []) {
   if (!filtered.length) return [];
 
   const fontSize = fitStanzaFontSize(filtered);
-  const spacing  = Math.max(20, Math.round(fontSize * LINE_HEIGHT_FACTOR));
+
+  // Dynamic spacing: fill TARGET_FILL of slide height, clamped to [1.4×, 2.5×] fontSize
+  const calcSpacing = (fs, n) => {
+    if (n <= 1) return fs * 1.5;
+    const targetH = SLIDE_HEIGHT * TARGET_FILL;
+    const dynamic = (targetH - fs) / (n - 1);
+    return Math.min(fs * MAX_SP_FACTOR, Math.max(fs * MIN_SP_FACTOR, dynamic));
+  };
+  const spacing = calcSpacing(fontSize, filtered.length);
 
   const blockH  = (filtered.length - 1) * spacing + fontSize;
   const startY  = (SLIDE_HEIGHT - blockH) / 2 + fontSize / 2;
