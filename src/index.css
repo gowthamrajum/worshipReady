@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  /* Slide in animation (Y-axis) */
+  .animate-slide-in {
+    animation: slide-in 0.4s ease-out both;
+  }
+
+  /* Slide in animation (X-axis) */
+  .animate-slide-in-x {
+    animation: slide-in-x 0.4s ease-out both;
+  }
+
+  /* Fade in animation */
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out both;
+  }
+
+  /* Ping animation for keep-alive indicator */
+  .animate-ping-slow {
+    animation: ping-slow 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  /* Pulse animation for working text */
+  .animate-working-pulse {
+    animation: working-pulse 2s ease-in-out infinite;
+  }
+
+  /* Pen moving animation */
+  .animate-working-pen {
+    animation: working-pen 1s ease-in-out infinite;
+  }
+
+  /* Typing text animation */
+  .typewriter-text {
+    overflow: hidden;
+    white-space: nowrap;
+    border-right: 2px solid transparent; 
+    animation: typing 3s steps(40, end) forwards;
+  }
+
+  /* Blinking cursor (if needed) */
+  .blinking-cursor::after {
+    content: '|';
+    animation: blink 1s infinite;
+    margin-left: 4px;
+    font-weight: bold;
+  }
+
+  /* Hide scrollbar */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Keyframes section */
+  @keyframes slide-in {
+    from {
+      transform: translateY(10px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide-in-x {
+    from {
+      transform: translateX(20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes ping-slow {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    75%, 100% {
+      transform: scale(1.75);
+      opacity: 0;
+    }
+  }
+
+  @keyframes working-pulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.05);
+      opacity: 0.9;
+    }
+  }
+
+  @keyframes blink {
+    0%, 50%, 100% {
+      opacity: 1;
+    }
+    25%, 75% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes typing {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+
+  @keyframes working-pen {
+    0%, 100% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    50% {
+      transform: translateX(5px);
+      opacity: 1;
+    }
+  }
+}
