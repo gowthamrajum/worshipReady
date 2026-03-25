@@ -16,6 +16,8 @@ export default function SongTable({ songs, query, onPreview, fetchSongs }) {
   const [updatedByFilter, setUpdatedByFilter] = useState("");
   const [selectedSongForDelete, setSelectedSongForDelete] = useState(null);
   const [deletePassword, setDeletePassword] = useState("");
+  const [pendingEditSong, setPendingEditSong] = useState(null);
+  const [editPassword, setEditPassword] = useState("");
   const DELETE_PASSWORD = import.meta.env.VITE_DELETE_PASSWORD;
   const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
@@ -60,7 +62,6 @@ export default function SongTable({ songs, query, onPreview, fetchSongs }) {
       return;
     }
     const exportData = currentRows.map((row) => ({
-      ID: row.song_id,
       Name: row.song_name,
       CreatedAt: row.created_at,
       LastUpdatedAt: row.last_updated_at,
@@ -76,7 +77,6 @@ export default function SongTable({ songs, query, onPreview, fetchSongs }) {
       return;
     }
     const exportData = filteredSongs.map((row) => ({
-      ID: row.song_id,
       Name: row.song_name,
       CreatedAt: row.created_at,
       LastUpdatedAt: row.last_updated_at,
@@ -147,9 +147,6 @@ export default function SongTable({ songs, query, onPreview, fetchSongs }) {
       <table className="min-w-full table-auto text-sm">
         <thead className="bg-gray-100">
           <tr>
-            <th className="px-4 py-2 text-left font-semibold cursor-pointer" onClick={() => requestSort("song_id")}>
-              ID {sortConfig.key === "song_id" && (sortConfig.direction === "asc" ? <FiChevronUp /> : <FiChevronDown />)}
-            </th>
             <th className="px-4 py-2 text-left font-semibold cursor-pointer" onClick={() => requestSort("song_name")}>
               Name {sortConfig.key === "song_name" && (sortConfig.direction === "asc" ? <FiChevronUp /> : <FiChevronDown />)}
             </th>
@@ -189,14 +186,13 @@ export default function SongTable({ songs, query, onPreview, fetchSongs }) {
         <tbody>
           {currentRows.map((song) => (
             <tr key={song.song_id} className="border-b hover:bg-gray-50">
-              <td className="px-4 py-2">{song.song_id}</td>
               <td className="px-4 py-2">{song.song_name}</td>
               <td className="px-4 py-2 flex gap-2">
                 <button onClick={() => onPreview(song.song_id)} className="text-indigo-600 hover:text-indigo-900">
                     <FiEye size={18} />
                 </button>
                 <button
-                    onClick={() => setSelectedSongIdForEdit(song.song_id)}
+                    onClick={() => setPendingEditSong(song)}
                     className="text-green-600 hover:text-green-800"
                 >
                     <FiEdit size={18} />
@@ -251,6 +247,52 @@ export default function SongTable({ songs, query, onPreview, fetchSongs }) {
           Next
         </button>
       </div>
+
+      {/* Edit Password Modal */}
+        {pendingEditSong && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded shadow-lg text-center space-y-4 max-w-sm">
+            <h2 className="text-green-700 text-lg font-semibold">Confirm Edit</h2>
+            <p className="text-sm text-gray-700">
+                Enter password to edit <strong>{pendingEditSong.song_name}</strong>
+            </p>
+
+            <input
+                type="password"
+                placeholder="Enter password"
+                className="w-full border px-4 py-2 rounded"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+            />
+
+            <div className="flex justify-center gap-4 mt-4">
+                <button
+                onClick={() => {
+                    setPendingEditSong(null);
+                    setEditPassword("");
+                }}
+                className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
+                >
+                Cancel
+                </button>
+                <button
+                onClick={() => {
+                    if (editPassword !== DELETE_PASSWORD) {
+                    toast.error("Incorrect password.");
+                    return;
+                    }
+                    setSelectedSongIdForEdit(pendingEditSong.song_id);
+                    setPendingEditSong(null);
+                    setEditPassword("");
+                }}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                >
+                Confirm
+                </button>
+            </div>
+            </div>
+        </div>
+        )}
 
       {/* Edit Modal */}
         {selectedSongIdForEdit && (
