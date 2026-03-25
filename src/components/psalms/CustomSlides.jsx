@@ -15,9 +15,10 @@ import {
   HiOutlineAnnotation,
 } from "react-icons/hi";
 
-import ConfirmModal from "./ConfirmModal";
-import { buildSongSlideLines, ensureFontLoaded } from "../utils/buildSongSlideLines";
-import qrDonationsImg from "../assets/qr-donations.png";
+import ConfirmModal from "../modals/ConfirmModal";
+import { buildSongSlideLines, ensureFontLoaded } from "../../utils/buildSongSlideLines";
+import qrDonationsImg from "../../assets/qr-donations.png";
+import { getMaxVerse, getOrdinal, getTeluguOrdinal, validatePsalmInput, buildPsalmLines } from "../../constants/psalms";
 
 const PSALM_READING_LABEL = "Psalm Reading";
 
@@ -72,121 +73,6 @@ const INITIAL_SLIDES = [
     icon: <HiOutlineDocumentText size={16} />,
   },
 ];
-
-// ── English word-form ordinal builder ────────────────────────────────────────
-const ENG_ONES_ORD = ["", "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth"];
-const ENG_TEENS_ORD = ["Tenth", "Eleventh", "Twelfth", "Thirteenth", "Fourteenth", "Fifteenth", "Sixteenth", "Seventeenth", "Eighteenth", "Nineteenth"];
-const ENG_TENS_ORD = ["", "", "Twentieth", "Thirtieth", "Fortieth", "Fiftieth", "Sixtieth", "Seventieth", "Eightieth", "Ninetieth"];
-const ENG_TENS_PFX = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-
-function getOrdinal(n) {
-  if (n >= 1 && n <= 9) return ENG_ONES_ORD[n];
-  if (n >= 10 && n <= 19) return ENG_TEENS_ORD[n - 10];
-  if (n >= 20 && n <= 99) {
-    const t = Math.floor(n / 10), o = n % 10;
-    return o === 0 ? ENG_TENS_ORD[t] : `${ENG_TENS_PFX[t]} ${ENG_ONES_ORD[o]}`;
-  }
-  if (n === 100) return "Hundredth";
-  if (n >= 101 && n <= 150) {
-    const r = n - 100;
-    if (r <= 9) return `Hundred and ${ENG_ONES_ORD[r]}`;
-    if (r <= 19) return `Hundred and ${ENG_TEENS_ORD[r - 10]}`;
-    const t = Math.floor(r / 10), o = r % 10;
-    return o === 0 ? `Hundred and ${ENG_TENS_ORD[t]}` : `Hundred and ${ENG_TENS_PFX[t]} ${ENG_ONES_ORD[o]}`;
-  }
-  return `${n}th`;
-}
-
-// ── Telugu ordinal builder ──────────────────────────────────────────────────
-const TEL_ONES = ["", "మొదటి", "రెండవ", "మూడవ", "నాలుగవ", "ఐదవ", "ఆరవ", "ఏడవ", "ఎనిమిదవ", "తొమ్మిదవ"];
-const TEL_TEENS = ["పదవ", "పదకొండవ", "పన్నెండవ", "పదమూడవ", "పధ్నాలుగవ", "పదిహేనవ", "పదహారవ", "పదిహేడవ", "పధ్ధెనిమిదవ", "పందొమ్మిదవ"];
-const TEL_TENS_ORD = ["", "", "ఇరవయ్యవ", "ముప్పయ్యవ", "నలభయ్యవ", "ఏభయ్యవ", "అరవయ్యవ", "డెబ్బయ్యవ", "ఎనభయ్యవ", "తొంభయ్యవ"];
-const TEL_TENS_PFX = ["", "", "ఇరవై", "ముప్పై", "నలభై", "ఏభై", "అరవై", "డెబ్భై", "ఎనభై", "తొంభై"];
-const TEL_COMPOUND_ONES = ["", "ఒకటవ", "రెండవ", "మూడవ", "నాలుగవ", "ఐదవ", "ఆరవ", "ఏడవ", "ఎనిమిదవ", "తొమ్మిదవ"];
-
-function getTeluguOrdinal(n) {
-  if (n >= 1 && n <= 9) return TEL_ONES[n];
-  if (n >= 10 && n <= 19) return TEL_TEENS[n - 10];
-  if (n >= 20 && n <= 99) {
-    const t = Math.floor(n / 10), o = n % 10;
-    return o === 0 ? TEL_TENS_ORD[t] : `${TEL_TENS_PFX[t]} ${TEL_COMPOUND_ONES[o]}`;
-  }
-  if (n === 100) return "నూరవ";
-  if (n >= 101 && n <= 150) {
-    const r = n - 100;
-    if (r <= 9) return `నూట ${TEL_COMPOUND_ONES[r]}`;
-    if (r <= 19) return `నూట ${TEL_TEENS[r - 10]}`;
-    const t = Math.floor(r / 10), o = r % 10;
-    return o === 0 ? `నూట ${TEL_TENS_ORD[t]}` : `నూట ${TEL_TENS_PFX[t]} ${TEL_COMPOUND_ONES[o]}`;
-  }
-  return `${n}వ`;
-}
-
-// ── Psalm verse counts (1–150) ──────────────────────────────────────────────
-// prettier-ignore
-const PSALM_VERSE_COUNT = [
-  0, // index 0 unused
-  6,12,8,8,12,10,17,9,20,18,    // 1-10
-  7,8,6,7,5,11,15,50,14,9,      // 11-20
-  13,31,6,10,22,12,14,9,11,12,  // 21-30
-  24,11,22,22,28,12,40,22,13,17,// 31-40
-  13,11,5,26,17,11,9,14,20,23,  // 41-50
-  19,9,6,7,23,13,11,11,17,12,   // 51-60
-  8,12,11,10,13,20,7,35,36,5,   // 61-70
-  24,20,28,23,10,12,20,72,13,19,// 71-80
-  16,8,18,12,13,17,7,18,52,17,  // 81-90
-  16,15,5,23,11,13,12,9,9,5,    // 91-100
-  8,28,22,35,45,48,43,13,31,7,  // 101-110
-  10,10,9,8,18,19,2,29,176,7,   // 111-120
-  8,9,4,8,5,6,5,6,8,8,          // 121-130
-  3,18,3,3,21,26,9,8,24,13,     // 131-140
-  10,7,12,15,21,10,20,14,9,6,   // 141-150
-];
-
-function getMaxVerse(chapter) {
-  return PSALM_VERSE_COUNT[chapter] || 0;
-}
-
-/** Validate verse range against the psalm's actual verse count. Returns error string or null. */
-function validatePsalmInput(chapter, verseStart, verseEnd) {
-  const ch = parseInt(chapter, 10);
-  if (!ch || ch < 1 || ch > 150) return "Psalm chapter must be 1\u2013150";
-  const max = getMaxVerse(ch);
-  const vs = verseStart ? parseInt(verseStart, 10) : null;
-  const ve = verseEnd ? parseInt(verseEnd, 10) : null;
-  if (vs && !ve) return "Please enter the ending verse";
-  if (!vs && ve) return "Please enter the starting verse";
-  if (vs && ve) {
-    if (vs < 1) return "Starting verse must be at least 1";
-    if (ve < vs) return "Ending verse must be \u2265 starting verse";
-    if (vs > max) return `Psalm ${ch} only has ${max} verses`;
-    if (ve > max) return `Psalm ${ch} only has ${max} verses (max ${max})`;
-  }
-  return null;
-}
-
-/** Build the formatted Psalm slide lines from chapter + optional verse range. */
-function buildPsalmLines(chapter, verseStart, verseEnd) {
-  const teluguPsalm = `${getTeluguOrdinal(chapter)} కీర్తన`;
-  const englishPsalm = `${getOrdinal(chapter)} Psalm`;
-
-  const hasRange = verseStart && verseEnd;
-
-  const teluguLine = hasRange
-    ? `${teluguPsalm} : ${verseStart}-${verseEnd} వచనాలు`
-    : teluguPsalm;
-
-  const englishLine = hasRange
-    ? `${englishPsalm} : ${verseStart}-${verseEnd}th Verse`
-    : englishPsalm;
-
-  return [
-    "ఉత్తర-ప్రత్యుత్తర వాక్య పఠనం",
-    "Responsive Reading",
-    teluguLine,
-    englishLine,
-  ];
-}
 
 const CustomSlides = ({ onAddSlide }) => {
   const [expanded, setExpanded] = useState(false);

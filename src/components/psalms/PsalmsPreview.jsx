@@ -1,10 +1,8 @@
 import React, { useState } from "react";
-import axios from "axios";
 import { FiChevronDown, FiX, FiCopy } from "react-icons/fi";
 import { HiOutlineBookOpen, HiOutlineSearch } from "react-icons/hi";
-import { layoutVersesForSlide } from "../utils/psalmSlideBuilder";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+import { layoutVersesForSlide } from "../../utils/psalmSlideBuilder";
+import { fetchPsalmChapter, fetchPsalmRange } from "../../api/client";
 
 const PsalmsPreview = ({ dragMode, onAddPsalmSlides }) => {
   const [expanded, setExpanded] = useState(false);
@@ -33,7 +31,7 @@ const PsalmsPreview = ({ dragMode, onAddPsalmSlides }) => {
     try {
       let res;
       if (mode === "chapter") {
-        res = await axios.get(`${API_BASE}/psalms/${chapter}`);
+        res = await fetchPsalmChapter(chapter);
       } else {
         if (!startVerse || !endVerse || isNaN(startVerse) || isNaN(endVerse)) {
           setError("Please enter a valid verse range.");
@@ -41,9 +39,7 @@ const PsalmsPreview = ({ dragMode, onAddPsalmSlides }) => {
           return;
         }
 
-        res = await axios.get(
-          `${API_BASE}/psalms/${chapter}/range?start=${startVerse}&end=${endVerse}`
-        );
+        res = await fetchPsalmRange(chapter, startVerse, endVerse);
       }
 
       setVerses(res.data);
@@ -155,7 +151,6 @@ const PsalmsPreview = ({ dragMode, onAddPsalmSlides }) => {
                 <button
                   onClick={() => {
                     const layout = layoutVersesForSlide(verses);
-                    console.log("🧠 Auto-layout applied:", layout);
                     onAddPsalmSlides(layout);
                   }}
                   className="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"

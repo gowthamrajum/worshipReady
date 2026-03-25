@@ -1,6 +1,6 @@
-import axios from "axios";
 import React, { useRef, useEffect } from "react";
 import toast from "react-hot-toast";
+import { deleteSlideFromBackend } from "../api/client";
 
 export default function useSlideHandlers({ slides, currentIndex, slideOps, presentationName }) {
   const slideRefs = useRef([]);
@@ -43,9 +43,7 @@ export default function useSlideHandlers({ slides, currentIndex, slideOps, prese
     }
 
     try {
-      await axios.delete(
-        `${import.meta.env.VITE_PRESENTATION_API}/presentations/slide/${presentationName}/${slide.id}`
-      );
+      await deleteSlideFromBackend(presentationName, slide.id);
       console.log("Slide deleted from backend");
       deleteSlide(index);
     } catch (err) {

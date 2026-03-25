@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import Songs from "./Songs";
-import Psalms from "./Psalms";
-import SlideComposer from "./SlideComposer";
+import Songs from "../songs/Songs";
+import Psalms from "../psalms/Psalms";
+import SlideComposer from "../slides/SlideComposer";
 import HealthCheck from "./HealthCheck";
-import useKeepAlive from "../hooks/useKeepAlive";
+import useKeepAlive from "../../hooks/useKeepAlive";
 import { FiActivity } from "react-icons/fi";
+import { API_BASE } from "../../api/client";
 import { RiQuillPenFill } from "react-icons/ri"; // ✍️ Correct pen icon!
 
 const tabs = ["Songs", "Psalms", "Slide Composer", "Health Check"];
@@ -13,7 +14,7 @@ export default function Tabs({ userName }) {
   const [active, setActive] = useState("Songs");
 
   const shouldPing = true; // Always ping on any tab now
-  const pinging = useKeepAlive(`${import.meta.env.VITE_API_BASE_URL}/ping`, shouldPing, 180000);
+  const pinging = useKeepAlive(`${API_BASE}/ping`, shouldPing, 180000);
 
   return (
     <div className="max-w-7xl mx-auto mt-6">

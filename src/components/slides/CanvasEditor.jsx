@@ -1,8 +1,17 @@
 // CanvasEditor.jsx
 import React, { useState, useEffect, useRef } from "react";
 import CanvasToolbar from "./CanvasToolbar";
-import { exportSlideCanvasAsImage } from "../utils/exportSlideCanvasAsImage";
-import { STATIC_BACKGROUNDS } from "../utils/staticBackgrounds";
+import { exportSlideCanvasAsImage } from "../../utils/exportSlideCanvasAsImage";
+import { STATIC_BACKGROUNDS } from "../../utils/staticBackgrounds";
+import {
+  CANVAS_WIDTH as CANVAS_W,
+  CANVAS_HEIGHT as CANVAS_H,
+  MAX_FONT_SIZE as MAX_FONT,
+  DEFAULT_BG_COLOR,
+  TARGET_FILL,
+  MIN_SP_FACTOR,
+  MAX_SP_FACTOR,
+} from "../../config/canvas";
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 
@@ -68,9 +77,6 @@ function fitStanzaFontSize(
 
   return Math.min(fontHoriz, maxFontVert);
 }
-
-const CANVAS_W = 960;
-const CANVAS_H = 540;
 
 const CanvasEditor = ({
   slides,
@@ -154,7 +160,6 @@ const CanvasEditor = ({
     const y = (e.pageY - top  - window.scrollY) / sc;
 
     // maxTextWidth matches the element's width: "800px" so text never overflows its container.
-    const MAX_FONT      = 70;
     const maxTextWidth  = 800;
     const maxTextHeight = container.clientHeight * 0.9;
 
@@ -191,9 +196,6 @@ const CanvasEditor = ({
       // height, giving natural breathing room regardless of line count.
       // Clamp between 1.4× (minimum legible) and 2.5× (maximum for few lines).
       const STANZA_SPACING = 1.5; // used only for font-size calculation
-      const TARGET_FILL    = 0.85;
-      const MIN_SP_FACTOR  = 1.4;
-      const MAX_SP_FACTOR  = 2.5;
 
       const calcSpacing = (fs, n) => {
         if (n <= 1) return fs * 1.5;
@@ -354,7 +356,7 @@ const CanvasEditor = ({
         style={{
           width: "960px",
           height: "540px",
-          background: slides[currentIndex]?.backgroundColor || "#4b5c47",
+          background: slides[currentIndex]?.backgroundColor || DEFAULT_BG_COLOR,
           ...(slides[currentIndex]?.backgroundTheme
             ? {
                 backgroundImage: `url(${STATIC_BACKGROUNDS.find((b) => b.id === slides[currentIndex].backgroundTheme)?.src})`,
@@ -492,7 +494,7 @@ const CanvasEditor = ({
         selectedIds={selectedIds}
         setSelectedIds={setSelectedIds}
         editMode={editMode}
-        backgroundColor={slides[currentIndex]?.backgroundColor || "#4b5c47"}
+        backgroundColor={slides[currentIndex]?.backgroundColor || DEFAULT_BG_COLOR}
         backgroundImage={slides[currentIndex]?.backgroundImage || null}
         backgroundTheme={slides[currentIndex]?.backgroundTheme || null}
         onBackgroundChange={(bg) => {
@@ -505,7 +507,7 @@ const CanvasEditor = ({
           setTimeout(() => captureSlideImage(slideRefs.current[currentIndex]), 100);
         }}
         onResetCurrentBg={() => {
-          setSlideBackground(currentIndex, { backgroundColor: "#4b5c47", backgroundImage: null, backgroundTheme: null });
+          setSlideBackground(currentIndex, { backgroundColor: DEFAULT_BG_COLOR, backgroundImage: null, backgroundTheme: null });
           setTimeout(() => captureSlideImage(slideRefs.current[currentIndex]), 100);
         }}
         onResetAllBg={() => {

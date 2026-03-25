@@ -1,7 +1,6 @@
 import { exportAllSlidesToPPT } from "../utils/exportAllSlidesToPPT";
 import { exportSlideCanvasAsImage } from "../utils/exportSlideCanvasAsImage";
-import axios from "axios";
-const PRESENTATION_BASE = import.meta.env.VITE_PRESENTATION_API;
+import { saveSlideToBackend, updateSlideOnBackend } from "../api/client";
 
 export function useExportHandlers(slideRefs, slides, presentationName, markSlideSaved, markSlideBackendSaved) {
   const exportAll = async () => {
@@ -36,10 +35,10 @@ export function useExportHandlers(slideRefs, slides, presentationName, markSlide
       if (slide.savedToBackend) {
         // Try update first; if slide was cleaned up, re-insert
         try {
-          await axios.put(`${PRESENTATION_BASE}/presentations/slide`, payload);
+          await updateSlideOnBackend(payload);
         } catch (putErr) {
           if (putErr.response?.status === 404) {
-            await axios.post(`${PRESENTATION_BASE}/presentations/slide`, payload);
+            await saveSlideToBackend(payload);
           } else {
             throw putErr;
           }
@@ -47,10 +46,10 @@ export function useExportHandlers(slideRefs, slides, presentationName, markSlide
       } else {
         // Try insert; if randomId already exists (duplicate), update instead
         try {
-          await axios.post(`${PRESENTATION_BASE}/presentations/slide`, payload);
+          await saveSlideToBackend(payload);
         } catch (postErr) {
           if (postErr.response?.status === 500 && postErr.response?.data?.includes?.("UNIQUE")) {
-            await axios.put(`${PRESENTATION_BASE}/presentations/slide`, payload);
+            await updateSlideOnBackend(payload);
           } else {
             throw postErr;
           }

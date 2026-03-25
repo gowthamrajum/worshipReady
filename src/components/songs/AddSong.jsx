@@ -1,14 +1,10 @@
 import React, { useState, useRef } from "react";
-import axios from "axios";
 import ReCAPTCHA from "react-google-recaptcha";
 import {
   FiPlusCircle, FiPlus, FiEdit3, FiTrash, FiMove
 } from "react-icons/fi";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-
-const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+import { createSong, RECAPTCHA_SITE_KEY } from "../../api/client";
 
 const isEnglishText = (text) => /^[\x00-\x7F\s]+$/.test(text);
 
@@ -139,7 +135,7 @@ const AddSong = ({ onSongAdded }) => {
 
     try {
       const headers = captchaToken ? { "x-recaptcha-token": captchaToken } : {};
-      await axios.post(`${API_BASE}/songs`, payload, { headers });
+      await createSong(payload, headers);
       setModalState({ type: "success", message: "🎉 Song added successfully!" });
       onSongAdded?.();
       setSongName("");

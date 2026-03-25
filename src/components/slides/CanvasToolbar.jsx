@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import BgThemeModal from "./BgThemeModal";
+import BgThemeModal from "../modals/BgThemeModal";
+import { TOOLBAR_MIN_FONT, TOOLBAR_MAX_FONT, MIN_LINE_SPACING, MAX_LINE_SPACING } from "../../config/canvas";
 import {
   HiOutlineTrash,
   HiOutlineChevronUp,
@@ -29,10 +30,8 @@ const CanvasToolbar = ({
   onResetCurrentBg,
   onResetAllBg,
 }) => {
-  const MIN_FONT_SIZE = 25;
-  const MAX_FONT_SIZE = 70;
-  const MIN_LINE_SPACING = 20;
-  const MAX_LINE_SPACING = 150;
+  const MIN_FONT_SIZE = TOOLBAR_MIN_FONT;
+  const MAX_FONT_SIZE = TOOLBAR_MAX_FONT;
 
   // Which panel is open: "backdrop" | "type" | "scale" | null
   const [activePanel, setActivePanel] = useState(null);

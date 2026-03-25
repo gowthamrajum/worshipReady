@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import Tabs from "./components/Tabs";
+import Tabs from "./components/layout/Tabs";
 import { Toaster } from "react-hot-toast";
 
 export default function App() {

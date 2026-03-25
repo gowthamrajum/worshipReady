@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { DEFAULT_BG_COLOR } from "../../config/canvas";
 import {
   MdDelete,
   MdContentCopy,
@@ -22,6 +23,7 @@ const SlideSwitcher = ({
 }) => {
   const containerRef = useRef(null);
   const [previewIndex, setPreviewIndex] = useState(null);
+  const [copyModalIndex, setCopyModalIndex] = useState(null);
 
   // ── Drag-to-reorder state ─────────────────────────────────────────────────
   const [dragFromIndex, setDragFromIndex] = useState(null);
@@ -125,22 +127,12 @@ const SlideSwitcher = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDuplicate(index, "next");
+                  setCopyModalIndex(index);
                 }}
-                title="Duplicate next"
+                title="Duplicate slide"
                 className="text-blue-500 hover:text-blue-700"
               >
                 <MdContentCopy size={14} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDuplicate(index, "end");
-                }}
-                title="Duplicate to end"
-                className="text-blue-400 hover:text-blue-700 text-[9px] font-bold"
-              >
-                END
               </button>
 
               <button
@@ -168,7 +160,7 @@ const SlideSwitcher = ({
             onClick={(e) => e.stopPropagation()}
             className="w-[960px] h-[540px] rounded shadow-lg relative"
             style={{
-              backgroundColor: slides[previewIndex]?.backgroundColor || "#4b5c47",
+              backgroundColor: slides[previewIndex]?.backgroundColor || DEFAULT_BG_COLOR,
               color: "white",
               display: "flex",
               flexDirection: "column",
@@ -199,6 +191,57 @@ const SlideSwitcher = ({
               className="absolute bottom-3 right-4 text-sm text-white bg-black/30 px-3 py-1 rounded hover:bg-black/50 transition"
             >
               Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Copy Position Modal */}
+      {copyModalIndex !== null && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+          onClick={() => setCopyModalIndex(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-xs w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 pt-5 pb-3 text-center">
+              <MdContentCopy size={22} className="mx-auto text-blue-500 mb-2" />
+              <h3 className="text-base font-bold text-gray-800 mb-1">
+                Copy Slide {copyModalIndex + 1}
+              </h3>
+              <p className="text-xs text-gray-400">
+                Where should the copy be placed?
+              </p>
+            </div>
+            <div className="flex border-t border-gray-100">
+              <button
+                onClick={() => {
+                  onDuplicate(copyModalIndex, "next");
+                  setCopyModalIndex(null);
+                }}
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50 transition border-r border-gray-100"
+              >
+                <MdArrowForward size={16} />
+                After Current
+              </button>
+              <button
+                onClick={() => {
+                  onDuplicate(copyModalIndex, "end");
+                  setCopyModalIndex(null);
+                }}
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 transition"
+              >
+                <MdAdd size={16} />
+                At the End
+              </button>
+            </div>
+            <button
+              onClick={() => setCopyModalIndex(null)}
+              className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition border-t border-gray-100"
+            >
+              Cancel
             </button>
           </div>
         </div>

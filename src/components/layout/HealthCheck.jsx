@@ -9,8 +9,7 @@ import {
   FiSliders,
 } from "react-icons/fi";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
-const PRES_API = import.meta.env.VITE_PRESENTATION_API;
+import { API_BASE, PRES_API } from "../../api/client";
 
 const STATUS = {
   loading: "loading",

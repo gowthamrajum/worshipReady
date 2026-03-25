@@ -1,7 +1,5 @@
 import React, { useState } from "react";
-import axios from "axios";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+import { fetchPsalmChapter, fetchPsalmRange } from "../../api/client";
 
 export default function Psalms() {
   const [mode, setMode] = useState("chapter");
@@ -22,7 +20,7 @@ export default function Psalms() {
       let res;
 
       if (mode === "chapter") {
-        res = await axios.get(`${API_BASE}/psalms/${chapter}`);
+        res = await fetchPsalmChapter(chapter);
       } else {
         if (!startVerse || !endVerse || isNaN(startVerse) || isNaN(endVerse)) {
           setError("Please enter a valid verse range.");
@@ -36,9 +34,7 @@ export default function Psalms() {
           return;
         }
 
-        res = await axios.get(
-          `${API_BASE}/psalms/${chapter}/range?start=${startVerse}&end=${endVerse}`
-        );
+        res = await fetchPsalmRange(chapter, startVerse, endVerse);
       }
 
       setVerses(res.data);

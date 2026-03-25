@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { FiX } from "react-icons/fi";
-import { STATIC_BACKGROUNDS } from "../utils/staticBackgrounds";
+import { STATIC_BACKGROUNDS } from "../../utils/staticBackgrounds";
 
 const CATEGORIES = [...new Set(STATIC_BACKGROUNDS.map((b) => b.category))];
 
