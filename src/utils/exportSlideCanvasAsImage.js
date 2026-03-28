@@ -36,6 +36,7 @@ export async function exportSlideCanvasAsImage(canvasRef, title = "Worship Slide
     const canvasImage = await html2canvas(canvasRef.current, {
       backgroundColor: null,
       scale: 2,
+      useCORS: true,
     });
 
     const dataUrl = canvasImage.toDataURL("image/png");

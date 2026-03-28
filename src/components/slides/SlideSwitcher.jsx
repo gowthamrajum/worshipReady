@@ -8,6 +8,9 @@ import {
   MdAdd,
   MdVisibility,
   MdDragIndicator,
+  MdCheckBox,
+  MdCheckBoxOutlineBlank,
+  MdClose,
 } from "react-icons/md";
 
 const SlideSwitcher = ({
@@ -20,10 +23,26 @@ const SlideSwitcher = ({
   onNext,
   onPrev,
   onReorder,
+  onReorderMultiple,
 }) => {
   const containerRef = useRef(null);
   const [previewIndex, setPreviewIndex] = useState(null);
   const [copyModalIndex, setCopyModalIndex] = useState(null);
+
+  // ── Multi-select state ────────────────────────────────────────────────────
+  const [selected, setSelected] = useState(new Set());
+
+  const toggleSelect = (e, index) => {
+    e.stopPropagation();
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelected(new Set());
 
   // ── Drag-to-reorder state ─────────────────────────────────────────────────
   const [dragFromIndex, setDragFromIndex] = useState(null);
@@ -32,14 +51,20 @@ const SlideSwitcher = ({
   const handleDragStart = (e, index) => {
     setDragFromIndex(index);
     e.dataTransfer.effectAllowed = "move";
-    // Make the drag ghost semi-transparent
     if (e.target) e.target.style.opacity = "0.5";
   };
 
   const handleDragEnd = (e) => {
     if (e.target) e.target.style.opacity = "1";
     if (dragFromIndex !== null && dragOverIndex !== null && dragFromIndex !== dragOverIndex) {
-      onReorder?.(dragFromIndex, dragOverIndex);
+      if (selected.has(dragFromIndex) && selected.size > 1) {
+        // Move the whole selection
+        const sortedIndices = Array.from(selected).sort((a, b) => a - b);
+        onReorderMultiple?.(sortedIndices, dragOverIndex);
+        clearSelection();
+      } else {
+        onReorder?.(dragFromIndex, dragOverIndex);
+      }
     }
     setDragFromIndex(null);
     setDragOverIndex(null);
@@ -88,12 +113,31 @@ const SlideSwitcher = ({
         </button>
       </div>
 
+      {/* Multi-select banner */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded px-3 py-1.5 text-sm">
+          <span className="text-blue-700 font-medium">{selected.size} slide{selected.size > 1 ? "s" : ""} selected</span>
+          <span className="text-blue-400 text-xs">— drag any selected slide to move the group</span>
+          <button
+            onClick={clearSelection}
+            title="Clear selection"
+            className="ml-auto flex items-center gap-1 text-xs text-blue-400 hover:text-blue-600"
+          >
+            <MdClose size={14} /> Clear
+          </button>
+        </div>
+      )}
+
       {/* Slide List */}
       <div
         ref={containerRef}
         className="flex gap-3 overflow-x-auto py-2 px-1 rounded border bg-white select-none"
       >
-        {slides.map((slide, index) => (
+        {slides.map((slide, index) => {
+          const isSelected = selected.has(index);
+          const isDragOver = dragOverIndex === index && dragFromIndex !== index;
+          const isDragging = dragFromIndex === index;
+          return (
           <div
             key={slide.id}
             draggable
@@ -101,12 +145,21 @@ const SlideSwitcher = ({
             onDragEnd={handleDragEnd}
             onDragOver={(e) => handleDragOver(e, index)}
             onClick={() => goToSlide(index)}
-            className={`w-24 min-w-[96px] h-24 border-2 rounded-md bg-white flex flex-col items-center justify-between p-1 cursor-pointer shadow-sm transition-all duration-150
-              ${index === currentIndex ? "border-blue-600" : "border-gray-300"}
-              ${dragOverIndex === index && dragFromIndex !== index ? "border-yellow-400 scale-105 shadow-md" : ""}
-              ${dragFromIndex === index ? "opacity-50" : ""}
+            className={`relative w-24 min-w-[96px] h-24 border-2 rounded-md bg-white flex flex-col items-center justify-between p-1 cursor-pointer shadow-sm transition-all duration-150
+              ${isSelected ? "border-indigo-500 bg-indigo-50" : index === currentIndex ? "border-blue-600" : "border-gray-300"}
+              ${isDragOver ? "border-yellow-400 scale-105 shadow-md" : ""}
+              ${isDragging ? "opacity-50" : ""}
             `}
           >
+            {/* Select checkbox */}
+            <button
+              onClick={(e) => toggleSelect(e, index)}
+              title={isSelected ? "Deselect" : "Select for multi-move"}
+              className={`absolute top-0.5 right-0.5 transition-colors ${isSelected ? "text-indigo-500" : "text-gray-300 hover:text-indigo-400"}`}
+            >
+              {isSelected ? <MdCheckBox size={14} /> : <MdCheckBoxOutlineBlank size={14} />}
+            </button>
+
             <div className="flex items-center gap-0.5 w-full">
               <MdDragIndicator size={12} className="text-gray-400 cursor-grab shrink-0" />
               <span className="text-xs font-medium truncate">Slide {index + 1}</span>
@@ -147,7 +200,8 @@ const SlideSwitcher = ({
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Preview Modal */}
@@ -172,19 +226,36 @@ const SlideSwitcher = ({
             {slides[previewIndex]?.backgroundImage && (
               <img src={slides[previewIndex].backgroundImage} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
             )}
-            {slides[previewIndex]?.lines.map((line, idx) => (
-              <div
-                key={idx}
-                style={{
-                  fontSize: `${line.fontSize}px`,
-                  textAlign: line.textAlign || "center",
-                  marginBottom: `${line.lineSpacing || 40}px`,
-                  whiteSpace: "pre-line",
-                }}
-              >
-                {line.text}
-              </div>
-            ))}
+            {slides[previewIndex]?.lines.map((line, idx) =>
+              line.type === "image" ? (
+                <img
+                  key={idx}
+                  src={line.src}
+                  alt={line.alt || ""}
+                  style={{
+                    position: "absolute",
+                    left: `${line.x}px`,
+                    top: `${line.y}px`,
+                    width: `${line.width}px`,
+                    height: `${line.height}px`,
+                    transform: "translate(-50%, -50%)",
+                    objectFit: "contain",
+                  }}
+                />
+              ) : (
+                <div
+                  key={idx}
+                  style={{
+                    fontSize: `${line.fontSize}px`,
+                    textAlign: line.textAlign || "center",
+                    marginBottom: `${line.lineSpacing || 40}px`,
+                    whiteSpace: "pre-line",
+                  }}
+                >
+                  {line.text}
+                </div>
+              )
+            )}
 
             <button
               onClick={() => setPreviewIndex(null)}

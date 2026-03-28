@@ -162,6 +162,23 @@ const useSlides = () => {
     setCurrentIndex(to);
   };
 
+  // Move a group of slides (sorted indices) so they land at targetIndex.
+  const reorderMultipleSlides = (sortedIndices, targetIndex) => {
+    const selectedSet = new Set(sortedIndices);
+    setSlides((prev) => {
+      const selected = sortedIndices.map((i) => prev[i]);
+      const remaining = prev.filter((_, i) => !selectedSet.has(i));
+      // Each selected slide removed before targetIndex shifts it left by 1.
+      const removedBefore = sortedIndices.filter((i) => i < targetIndex).length;
+      const insertAt = Math.min(remaining.length, Math.max(0, targetIndex - removedBefore));
+      const result = [...remaining];
+      result.splice(insertAt, 0, ...selected);
+      return result;
+    });
+    const removedBefore = sortedIndices.filter((i) => i < targetIndex).length;
+    setCurrentIndex(Math.max(0, targetIndex - removedBefore));
+  };
+
   const setSlideLines = (index, newLines) => {
     setSlides((prev) =>
       prev.map((slide, i) =>
@@ -334,6 +351,7 @@ const useSlides = () => {
     duplicateSlide,
     deleteSlide,
     reorderSlides,
+    reorderMultipleSlides,
     goToSlide,
     setSlideLines,
     setSlideBackground,

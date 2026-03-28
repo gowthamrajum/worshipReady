@@ -119,7 +119,7 @@ export default function Songs() {
       {activeTab === "Add" && <AddSong onSongAdded={loadSongs} />}
 
       {/* Quick Add */}
-      {activeTab === "Quick Add" && <QuickAddSong onSongAdded={loadSongs} />}
+      {activeTab === "Quick Add" && <QuickAddSong onSongAdded={loadSongs} onViewSong={handlePreview} />}
 
       {/* Preview Modal */}
       {modalOpen && previewSong && (

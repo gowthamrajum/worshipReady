@@ -102,15 +102,29 @@ const CustomSlides = ({ onAddSlide }) => {
   };
 
   /** Build Offerings slide with QR code matching the Donations Template layout. */
-  const handleAddOfferingsSlide = () => {
+  const handleAddOfferingsSlide = async () => {
     const uid = () => `line-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const stanzaId = `stanza-${uid()}`;
+
+    // Convert QR URL to base64 data URL so html2canvas can embed it when exporting
+    let qrSrc = qrDonationsImg;
+    try {
+      const resp = await fetch(qrDonationsImg);
+      const blob = await resp.blob();
+      qrSrc = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      // fall back to URL if conversion fails
+    }
 
     // Layout: text left-center, QR + caption right (960x540 canvas)
     const slideLines = [
       { id: uid(), text: "Offerings",  x: 350, y: 210, fontSize: 65, lineSpacing: 90, stanzaId, textAlign: "center" },
       { id: uid(), text: "కానుకలు",   x: 350, y: 330, fontSize: 65, lineSpacing: 90, stanzaId, textAlign: "center" },
-      { id: uid(), type: "image", src: qrDonationsImg, alt: "Donations QR", x: 760, y: 300, width: 200, height: 200, stanzaId },
+      { id: uid(), type: "image", src: qrSrc, alt: "Donations QR", x: 760, y: 300, width: 200, height: 200, stanzaId },
       { id: uid(), text: "Know ways to contribute !", x: 760, y: 160, fontSize: 18, lineSpacing: 30, stanzaId, textAlign: "center" },
     ];
     onAddSlide?.([slideLines]);

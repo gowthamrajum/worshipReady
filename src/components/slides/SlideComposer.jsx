@@ -36,7 +36,7 @@ const SlideComposer = () => {
     slides, currentIndex, currentSlide,
     addSlide, addMultipleSlides, addMultipleSlidesAtEnd,
     setSlideLines, goToSlide, captureSlideImage, setSlideEditMode,
-    markSlideSaved, duplicateSlide, reorderSlides, deleteSlide,
+    markSlideSaved, duplicateSlide, reorderSlides, reorderMultipleSlides, deleteSlide,
     markSlideBackendSaved, restoreSlides, clearSlides,
     removeLastNSlides, removeSlidesByIds,
     setSlideBackground, setAllSlidesBackground, resetAllBackgrounds,
@@ -308,6 +308,16 @@ const SlideComposer = () => {
                 updateSlideOrder(session.presentationName, slide.id, index)
                   .catch((err) => console.error("Failed to update order:", err));
               });
+            }}
+            onReorderMultiple={(sortedIndices, targetIndex) => {
+              reorderMultipleSlides(sortedIndices, targetIndex);
+              // Re-sync backend order after state update settles
+              setTimeout(() => {
+                slides.forEach((slide, index) => {
+                  updateSlideOrder(session.presentationName, slide.id, index)
+                    .catch((err) => console.error("Failed to update order:", err));
+                });
+              }, 0);
             }}
           />
 

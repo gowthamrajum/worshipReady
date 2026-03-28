@@ -185,7 +185,7 @@ function reorder(list, from, to) {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-const QuickAddSong = ({ onSongAdded }) => {
+const QuickAddSong = ({ onSongAdded, onViewSong }) => {
   const [rawLyrics, setRawLyrics] = useState("");
   const [songName, setSongName] = useState("");
   const [step, setStep] = useState("input"); // "input" | "review" | "done"
@@ -282,10 +282,11 @@ const QuickAddSong = ({ onSongAdded }) => {
       onSongAdded?.();
       setStep("done");
     } catch (err) {
-      const msg = err.response?.status === 409
-        ? "A similar song already exists."
-        : "Failed to save. Please try again.";
-      setModalState({ type: "error", message: msg });
+      if (err.response?.status === 409) {
+        setModalState({ type: "conflict", matchedSong: err.response.data.matched_song });
+      } else {
+        setModalState({ type: "error", message: "Failed to save. Please try again." });
+      }
     } finally {
       setSaving(false);
     }
@@ -810,6 +811,38 @@ const QuickAddSong = ({ onSongAdded }) => {
             >
               OK
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Conflict Modal (similar song exists) ── */}
+      {modalState && modalState.type === "conflict" && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg text-center space-y-3 max-w-sm">
+            <h2 className="text-lg font-semibold text-yellow-700">Similar Song Exists</h2>
+            <p className="text-sm text-gray-700">A similar song already exists:</p>
+            <p className="text-sm font-semibold text-indigo-700">
+              {modalState.matchedSong?.song_name}
+            </p>
+            <div className="flex justify-center gap-3 pt-1">
+              {onViewSong && (
+                <button
+                  onClick={() => {
+                    setModalState(null);
+                    onViewSong(modalState.matchedSong.song_id);
+                  }}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+                >
+                  View Song
+                </button>
+              )}
+              <button
+                onClick={() => setModalState(null)}
+                className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300"
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -4,6 +4,58 @@ import { FiChevronDown, FiMove, FiX, FiArrowRight, FiRotateCcw } from "react-ico
 import { HiMusicNote, HiOutlineDocumentText } from "react-icons/hi";
 import { buildSongSlideLines, ensureFontLoaded } from "../../utils/buildSongSlideLines";
 import { fetchSongList, fetchSong } from "../../api/client";
+import qrDonationsImg from "../../assets/qr-donations.png";
+
+// QR image is ~9.5 KB so Vite serves it as a URL; convert to data URL once and cache
+// so html2canvas / pptxgenjs can embed it without a separate fetch at export time.
+let _qrDataUrl = null;
+async function getQrDataUrl() {
+  if (_qrDataUrl) return _qrDataUrl;
+  try {
+    const resp = await fetch(qrDonationsImg);
+    const blob = await resp.blob();
+    _qrDataUrl = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    _qrDataUrl = qrDonationsImg; // fallback to URL if fetch fails
+  }
+  return _qrDataUrl;
+}
+
+const mkId = () => `line-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+/** Build the full Offerings separator slide (same layout as the CustomSlides Offerings button). */
+function buildOfferingsSlide(qrSrc) {
+  const stanzaId = `stanza-${mkId()}`;
+  return [
+    { id: mkId(), text: "Offerings",               x: 350, y: 210, fontSize: 65, lineSpacing: 90, stanzaId, textAlign: "center" },
+    { id: mkId(), text: "కానుకలు",                x: 350, y: 330, fontSize: 65, lineSpacing: 90, stanzaId, textAlign: "center" },
+    { id: mkId(), type: "image", src: qrSrc, alt: "Donations QR", x: 760, y: 300, width: 200, height: 200, stanzaId },
+    { id: mkId(), text: "Know ways to contribute !", x: 760, y: 160, fontSize: 18, lineSpacing: 30, stanzaId, textAlign: "center" },
+  ];
+}
+
+/**
+ * Append a QR block (caption text + QR image) in the bottom-right corner.
+ * All three elements share a stanzaId so they move together in the editor.
+ *
+ * Layout (960×540 canvas):
+ *   "Know ways to"  — fontSize 13, centered at (890, 383)
+ *   "contribute!"   — fontSize 13, centered at (890, 399)
+ *   QR image        — 120×120, centered at (890, 470)  → bottom edge at 530
+ */
+function appendQr(lines, qrSrc) {
+  const qrStanzaId = `qr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  return [
+    ...lines,
+    { id: mkId(), text: "Know ways to", x: 890, y: 383, fontSize: 13, lineSpacing: 16, stanzaId: qrStanzaId, textAlign: "center" },
+    { id: mkId(), text: "contribute!",  x: 890, y: 399, fontSize: 13, lineSpacing: 16, stanzaId: qrStanzaId, textAlign: "center" },
+    { id: mkId(), type: "image", src: qrSrc, alt: "Donations QR", x: 890, y: 470, width: 120, height: 120, stanzaId: qrStanzaId },
+  ];
+}
 
 const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
   const [expanded, setExpanded]   = useState(false);
@@ -13,6 +65,8 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
   const [selectedSong, setSelectedSong] = useState(null);
   const [lyrics, setLyrics]       = useState([]);
   const [expandedStanzas, setExpandedStanzas] = useState({});
+
+  const [isOfferingSong, setIsOfferingSong] = useState(false);
 
   // ── Arrange-mode state ──────────────────────────────────────────────────────
   const [selection, setSelection]             = useState([]);     // ordered stanza IDs
@@ -78,6 +132,7 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
     setRecurringLines(new Set());
     setRecurringRepeatable(true);
     setRecurringWholeFirst(false);
+    setIsOfferingSong(false);
     setLastBatchIds([]);
   };
 
@@ -178,27 +233,26 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
     const order = getFinalOrder();
     if (!order.length) return;
 
-    // Ensure the Anek Telugu font is loaded before measuring so the offscreen
-    // canvas uses real glyph metrics, not a fallback (which causes wrong font
-    // size → lines overlap or appear off-centre on the canvas).
     await ensureFontLoaded();
 
-    const slideLinesArray = order
-      .map(({ id, full }) => {
-        const stanza = stanzaById[id];
-        if (!stanza) return null;
+    const buildLines = ({ id, full }) => {
+      const stanza = stanzaById[id];
+      if (!stanza) return null;
+      const allLines = [...stanza.telugu, ...stanza.english];
+      if (id === recurringId && !full && recurringLines.size > 0) {
+        return buildSongSlideLines(allLines.filter((_, i) => recurringLines.has(i)));
+      }
+      return buildSongSlideLines(allLines);
+    };
 
-        const allLines = [...stanza.telugu, ...stanza.english];
+    const normalSlides = order.map(buildLines).filter(Boolean);
 
-        // Recurring stanza with selected-line subset (unless full=true for first slide)
-        if (id === recurringId && !full && recurringLines.size > 0) {
-          const chosenLines = allLines.filter((_, i) => recurringLines.has(i));
-          return buildSongSlideLines(chosenLines);
-        }
-
-        return buildSongSlideLines(allLines);
-      })
-      .filter(Boolean);
+    let slideLinesArray = normalSlides;
+    if (isOfferingSong) {
+      const qrSrc = await getQrDataUrl();
+      const offeringSlides = normalSlides.map((lines) => appendQr(lines, qrSrc));
+      slideLinesArray = [...normalSlides, buildOfferingsSlide(qrSrc), ...offeringSlides];
+    }
 
     if (slideLinesArray.length > 0) {
       const ids = onAddMultipleSlides?.(slideLinesArray) ?? [];
@@ -210,12 +264,17 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
   const handleMoveAll = async () => {
     if (!lyrics.length) return;
     await ensureFontLoaded();
-    const slideLinesArray = lyrics
-      .map((stanza) => {
-        const allLines = [...stanza.telugu, ...stanza.english];
-        return buildSongSlideLines(allLines);
-      })
+
+    const normalSlides = lyrics
+      .map((stanza) => buildSongSlideLines([...stanza.telugu, ...stanza.english]))
       .filter((lines) => lines.length > 0);
+
+    let slideLinesArray = normalSlides;
+    if (isOfferingSong) {
+      const qrSrc = await getQrDataUrl();
+      const offeringSlides = normalSlides.map((lines) => appendQr(lines, qrSrc));
+      slideLinesArray = [...normalSlides, buildOfferingsSlide(qrSrc), ...offeringSlides];
+    }
 
     if (slideLinesArray.length > 0) {
       const ids = onAddMultipleSlides?.(slideLinesArray) ?? [];
@@ -296,6 +355,32 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
               </button>
             </div>
 
+            {/* Song mode selector */}
+            <div className="flex rounded border overflow-hidden text-xs font-medium">
+              <button
+                title="Slides are created with song lyrics only — no QR overlay"
+                onClick={() => setIsOfferingSong(false)}
+                className={`flex-1 py-1.5 transition-colors ${
+                  !isOfferingSong
+                    ? "bg-gray-500 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                Normal
+              </button>
+              <button
+                title="Creates the song twice — once as normal lyric slides, then again with a donations QR code on each slide. Use for offering songs so the congregation can give while singing."
+                onClick={() => setIsOfferingSong(true)}
+                className={`flex-1 py-1.5 transition-colors ${
+                  isOfferingSong
+                    ? "bg-yellow-500 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                Normal + Offering
+              </button>
+            </div>
+
             {/* Mode tabs */}
             <div className="flex rounded border overflow-hidden text-sm">
               <button
@@ -326,10 +411,17 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
                 {/* Quick-action: send every stanza to the canvas in one click */}
                 <button
                   onClick={handleMoveAll}
-                  className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-600 text-white text-sm rounded font-semibold hover:bg-indigo-700 transition-colors"
+                  title={isOfferingSong
+                    ? `Adds ${lyrics.length} normal slides, then an Offerings separator slide, then ${lyrics.length} slides with QR code — ${lyrics.length * 2 + 1} slides total`
+                    : `Adds all ${lyrics.length} stanzas as slides with lyrics only`}
+                  className={`w-full flex items-center justify-center gap-2 py-2 text-sm rounded font-semibold transition-colors text-white ${
+                    isOfferingSong
+                      ? "bg-yellow-500 hover:bg-yellow-600"
+                      : "bg-indigo-600 hover:bg-indigo-700"
+                  }`}
                 >
                   <FiArrowRight size={14} />
-                  Move All Stanzas ({lyrics.length} slides)
+                  {isOfferingSong ? `Move All: Normal + Offering (${lyrics.length * 2 + 1} slides)` : `Move All Stanzas (${lyrics.length} slides)`}
                 </button>
                 {lastBatchIds.length > 0 && (
                   <button
@@ -727,10 +819,19 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
                   <div className="space-y-2">
                     <button
                       onClick={handleMoveToCanvas}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white rounded font-semibold hover:bg-indigo-700 transition-colors"
+                      title={isOfferingSong
+                        ? `Adds ${finalOrder.length} normal slides, then an Offerings separator slide, then ${finalOrder.length} slides with QR code — ${finalOrder.length * 2 + 1} slides total`
+                        : `Adds your ${finalOrder.length} selected stanzas as slides with lyrics only`}
+                      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded font-semibold transition-colors text-white ${
+                        isOfferingSong
+                          ? "bg-yellow-500 hover:bg-yellow-600"
+                          : "bg-indigo-600 hover:bg-indigo-700"
+                      }`}
                     >
                       <FiArrowRight size={16} />
-                      Move My Selection ({finalOrder.length} slides)
+                      {isOfferingSong
+                        ? `Move: Normal + Offering (${finalOrder.length * 2 + 1} slides)`
+                        : `Move My Selection (${finalOrder.length} slides)`}
                     </button>
 
                     {lastBatchIds.length > 0 && (

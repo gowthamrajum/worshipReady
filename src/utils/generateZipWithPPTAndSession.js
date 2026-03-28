@@ -228,6 +228,17 @@ export async function generateZipWithPPTAndSession(presentationName, localSlides
       if (textData) {
         slideObj.addImage({ data: textData, x: 0, y: 0, w: PPT_W, h: PPT_H });
       }
+
+      // Layer 3: Inline image elements (e.g. QR code on the Offerings slide)
+      for (const imgLine of (slide.lines || []).filter((l) => l.type === "image" && l.src)) {
+        const x = (imgLine.x - imgLine.width  / 2) / CANVAS_W * PPT_W;
+        const y = (imgLine.y - imgLine.height / 2) / CANVAS_H * PPT_H;
+        const w = imgLine.width  / CANVAS_W * PPT_W;
+        const h = imgLine.height / CANVAS_H * PPT_H;
+        try {
+          slideObj.addImage({ data: imgLine.src, x, y, w, h });
+        } catch { /* skip if image fails to embed */ }
+      }
     }
 
     const pptxBlob = await pptx.write("blob");
