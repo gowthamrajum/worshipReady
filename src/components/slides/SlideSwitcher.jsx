@@ -117,7 +117,7 @@ const SlideSwitcher = ({
       {selected.size > 0 && (
         <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded px-3 py-1.5 text-sm">
           <span className="text-blue-700 font-medium">{selected.size} slide{selected.size > 1 ? "s" : ""} selected</span>
-          <span className="text-blue-400 text-xs">— drag any selected slide to move the group</span>
+          <span className="text-blue-400 text-xs">— drag the grouped block to reposition</span>
           <button
             onClick={clearSelection}
             title="Clear selection"
@@ -133,75 +133,138 @@ const SlideSwitcher = ({
         ref={containerRef}
         className="flex gap-3 overflow-x-auto py-2 px-1 rounded border bg-white select-none"
       >
-        {slides.map((slide, index) => {
-          const isSelected = selected.has(index);
-          const isDragOver = dragOverIndex === index && dragFromIndex !== index;
-          const isDragging = dragFromIndex === index;
-          return (
-          <div
-            key={slide.id}
-            draggable
-            onDragStart={(e) => handleDragStart(e, index)}
-            onDragEnd={handleDragEnd}
-            onDragOver={(e) => handleDragOver(e, index)}
-            onClick={() => goToSlide(index)}
-            className={`relative w-24 min-w-[96px] h-24 border-2 rounded-md bg-white flex flex-col items-center justify-between p-1 cursor-pointer shadow-sm transition-all duration-150
-              ${isSelected ? "border-indigo-500 bg-indigo-50" : index === currentIndex ? "border-blue-600" : "border-gray-300"}
-              ${isDragOver ? "border-yellow-400 scale-105 shadow-md" : ""}
-              ${isDragging ? "opacity-50" : ""}
-            `}
-          >
-            {/* Select checkbox */}
-            <button
-              onClick={(e) => toggleSelect(e, index)}
-              title={isSelected ? "Deselect" : "Select for multi-move"}
-              className={`absolute top-0.5 right-0.5 transition-colors ${isSelected ? "text-indigo-500" : "text-gray-300 hover:text-indigo-400"}`}
-            >
-              {isSelected ? <MdCheckBox size={14} /> : <MdCheckBoxOutlineBlank size={14} />}
-            </button>
+        {(() => {
+          const hasSelection = selected.size > 1;
+          const sortedSelected = hasSelection ? Array.from(selected).sort((a, b) => a - b) : [];
+          const groupInsertPos = hasSelection ? sortedSelected[0] : -1;
+          let groupRendered = false;
 
-            <div className="flex items-center gap-0.5 w-full">
-              <MdDragIndicator size={12} className="text-gray-400 cursor-grab shrink-0" />
-              <span className="text-xs font-medium truncate">Slide {index + 1}</span>
-            </div>
+          const items = [];
+          slides.forEach((slide, index) => {
+            // If this slide is part of a multi-selection, render the group block once at the first selected position
+            if (hasSelection && selected.has(index)) {
+              if (!groupRendered) {
+                groupRendered = true;
+                const isDragOverGroup = dragOverIndex !== null && selected.has(dragOverIndex) && dragFromIndex !== null && !selected.has(dragFromIndex);
+                items.push(
+                  <div
+                    key="__group__"
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, groupInsertPos)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, groupInsertPos)}
+                    className={`relative flex gap-1 border-2 border-dashed border-indigo-400 bg-indigo-50 rounded-lg p-2 items-end transition-all duration-150
+                      ${isDragOverGroup ? "border-yellow-400 scale-105 shadow-md" : ""}
+                      ${dragFromIndex === groupInsertPos ? "opacity-50" : ""}
+                    `}
+                  >
+                    {/* Single group drag handle */}
+                    <div className="flex flex-col items-center justify-center pr-1 self-stretch cursor-grab">
+                      <MdDragIndicator size={20} className="text-indigo-400" />
+                      <span className="text-[10px] text-indigo-400 font-medium mt-0.5">{sortedSelected.length}</span>
+                    </div>
 
-            <div className="flex justify-center gap-2 w-full">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPreviewIndex(index);
-                }}
-                title="Preview"
-                className="text-gray-700 hover:text-black"
+                    {/* Mini thumbnails for each selected slide */}
+                    {sortedSelected.map((si) => (
+                      <div
+                        key={slides[si].id}
+                        onClick={() => goToSlide(si)}
+                        className={`relative w-20 min-w-[80px] h-20 border-2 rounded-md bg-white flex flex-col items-center justify-between p-1 cursor-pointer shadow-sm
+                          ${si === currentIndex ? "border-blue-600" : "border-indigo-300"}
+                        `}
+                      >
+                        <button
+                          onClick={(e) => toggleSelect(e, si)}
+                          title="Deselect"
+                          className="absolute top-0.5 right-0.5 text-indigo-500"
+                        >
+                          <MdCheckBox size={14} />
+                        </button>
+                        <span className="text-[10px] font-medium text-indigo-700 mt-1">Slide {si + 1}</span>
+                        <div className="flex justify-center gap-1.5 w-full">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setPreviewIndex(si); }}
+                            title="Preview"
+                            className="text-gray-600 hover:text-black"
+                          >
+                            <MdVisibility size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(si); }}
+                            title="Delete"
+                            className="text-red-400 hover:text-red-600"
+                          >
+                            <MdDelete size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+              return; // skip individual rendering for selected slides
+            }
+
+            // Normal unselected slide
+            const isDragOver = dragOverIndex === index && dragFromIndex !== index;
+            const isDragging = dragFromIndex === index;
+            items.push(
+              <div
+                key={slide.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onClick={() => goToSlide(index)}
+                className={`relative w-24 min-w-[96px] h-24 border-2 rounded-md bg-white flex flex-col items-center justify-between p-1 cursor-pointer shadow-sm transition-all duration-150
+                  ${index === currentIndex ? "border-blue-600" : "border-gray-300"}
+                  ${isDragOver ? "border-yellow-400 scale-105 shadow-md" : ""}
+                  ${isDragging ? "opacity-50" : ""}
+                `}
               >
-                <MdVisibility size={16} />
-              </button>
+                {/* Select checkbox */}
+                <button
+                  onClick={(e) => toggleSelect(e, index)}
+                  title="Select for multi-move"
+                  className="absolute top-0.5 right-0.5 text-gray-300 hover:text-indigo-400 transition-colors"
+                >
+                  <MdCheckBoxOutlineBlank size={14} />
+                </button>
 
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCopyModalIndex(index);
-                }}
-                title="Duplicate slide"
-                className="text-blue-500 hover:text-blue-700"
-              >
-                <MdContentCopy size={14} />
-              </button>
+                <div className="flex items-center gap-0.5 w-full">
+                  <MdDragIndicator size={12} className="text-gray-400 cursor-grab shrink-0" />
+                  <span className="text-xs font-medium truncate">Slide {index + 1}</span>
+                </div>
 
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(index);
-                }}
-                title="Delete"
-                className="text-red-500 hover:text-red-700"
-              >
-                <MdDelete size={16} />
-              </button>
-            </div>
-          </div>
-          );
-        })}
+                <div className="flex justify-center gap-2 w-full">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setPreviewIndex(index); }}
+                    title="Preview"
+                    className="text-gray-700 hover:text-black"
+                  >
+                    <MdVisibility size={16} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setCopyModalIndex(index); }}
+                    title="Duplicate slide"
+                    className="text-blue-500 hover:text-blue-700"
+                  >
+                    <MdContentCopy size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(index); }}
+                    title="Delete"
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <MdDelete size={16} />
+                  </button>
+                </div>
+              </div>
+            );
+          });
+
+          return items;
+        })()}
       </div>
 
       {/* Preview Modal */}
