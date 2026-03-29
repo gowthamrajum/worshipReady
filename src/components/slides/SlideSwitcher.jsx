@@ -46,7 +46,8 @@ const SlideSwitcher = ({
 
   // ── Drag-to-reorder state ─────────────────────────────────────────────────
   const [dragFromIndex, setDragFromIndex] = useState(null);
-  const [dragOverIndex, setDragOverIndex] = useState(null);
+  // dropLineIndex is a gap position (0 = before first card, slides.length = after last)
+  const [dropLineIndex, setDropLineIndex] = useState(null);
 
   const handleDragStart = (e, index) => {
     setDragFromIndex(index);
@@ -56,28 +57,35 @@ const SlideSwitcher = ({
 
   const handleDragEnd = (e) => {
     if (e.target) e.target.style.opacity = "1";
-    if (dragFromIndex !== null && dragOverIndex !== null && dragFromIndex !== dragOverIndex) {
+    if (dragFromIndex !== null && dropLineIndex !== null) {
       if (selected.has(dragFromIndex) && selected.size > 1) {
-        // Move the whole selection
+        // Multi-select move: dropLineIndex is already the correct gap for reorderMultipleSlides
         const sortedIndices = Array.from(selected).sort((a, b) => a - b);
-        onReorderMultiple?.(sortedIndices, dragOverIndex);
-        clearSelection();
+        const min = sortedIndices[0];
+        const max = sortedIndices[sortedIndices.length - 1];
+        // Skip if dropping inside the existing group span (no-op)
+        if (dropLineIndex < min || dropLineIndex > max + 1) {
+          onReorderMultiple?.(sortedIndices, dropLineIndex);
+          clearSelection();
+        }
       } else {
-        onReorder?.(dragFromIndex, dragOverIndex);
+        // Single slide: convert gap to post-removal splice index
+        const to = dropLineIndex > dragFromIndex ? dropLineIndex - 1 : dropLineIndex;
+        if (to !== dragFromIndex) {
+          onReorder?.(dragFromIndex, to);
+        }
       }
     }
     setDragFromIndex(null);
-    setDragOverIndex(null);
+    setDropLineIndex(null);
   };
 
-  const handleDragOver = (e, index) => {
+  const handleDragOver = (e, cardIndex) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    if (index !== dragOverIndex) setDragOverIndex(index);
-  };
-
-  const handleDragLeave = () => {
-    // Only clear if leaving the container entirely; individual cards handle their own state
+    const rect = e.currentTarget.getBoundingClientRect();
+    const newLineIndex = e.clientX < rect.left + rect.width / 2 ? cardIndex : cardIndex + 1;
+    if (newLineIndex !== dropLineIndex) setDropLineIndex(newLineIndex);
   };
 
   return (
@@ -145,16 +153,17 @@ const SlideSwitcher = ({
             if (hasSelection && selected.has(index)) {
               if (!groupRendered) {
                 groupRendered = true;
-                const isDragOverGroup = dragOverIndex !== null && selected.has(dragOverIndex) && dragFromIndex !== null && !selected.has(dragFromIndex);
                 items.push(
+                  <React.Fragment key="__group_with_line__">
+                    {dropLineIndex === groupInsertPos && dragFromIndex !== null && (
+                      <div className="w-1 self-stretch min-h-[96px] bg-blue-500 rounded-full flex-shrink-0" />
+                    )}
                   <div
-                    key="__group__"
                     draggable
                     onDragStart={(e) => handleDragStart(e, groupInsertPos)}
                     onDragEnd={handleDragEnd}
                     onDragOver={(e) => handleDragOver(e, groupInsertPos)}
                     className={`relative flex gap-1 border-2 border-dashed border-indigo-400 bg-indigo-50 rounded-lg p-2 items-end transition-all duration-150
-                      ${isDragOverGroup ? "border-yellow-400 scale-105 shadow-md" : ""}
                       ${dragFromIndex === groupInsertPos ? "opacity-50" : ""}
                     `}
                   >
@@ -200,17 +209,20 @@ const SlideSwitcher = ({
                       </div>
                     ))}
                   </div>
+                  </React.Fragment>
                 );
               }
               return; // skip individual rendering for selected slides
             }
 
             // Normal unselected slide
-            const isDragOver = dragOverIndex === index && dragFromIndex !== index;
             const isDragging = dragFromIndex === index;
             items.push(
+              <React.Fragment key={slide.id}>
+                {dropLineIndex === index && dragFromIndex !== null && (
+                  <div className="w-1 self-stretch min-h-[96px] bg-blue-500 rounded-full flex-shrink-0" />
+                )}
               <div
-                key={slide.id}
                 draggable
                 onDragStart={(e) => handleDragStart(e, index)}
                 onDragEnd={handleDragEnd}
@@ -218,7 +230,6 @@ const SlideSwitcher = ({
                 onClick={() => goToSlide(index)}
                 className={`relative w-24 min-w-[96px] h-24 border-2 rounded-md bg-white flex flex-col items-center justify-between p-1 cursor-pointer shadow-sm transition-all duration-150
                   ${index === currentIndex ? "border-blue-600" : "border-gray-300"}
-                  ${isDragOver ? "border-yellow-400 scale-105 shadow-md" : ""}
                   ${isDragging ? "opacity-50" : ""}
                 `}
               >
@@ -260,8 +271,16 @@ const SlideSwitcher = ({
                   </button>
                 </div>
               </div>
+              </React.Fragment>
             );
           });
+
+          // Drop line after the last slide
+          if (dropLineIndex === slides.length && dragFromIndex !== null) {
+            items.push(
+              <div key="__dropline_end__" className="w-1 self-stretch min-h-[96px] bg-blue-500 rounded-full flex-shrink-0" />
+            );
+          }
 
           return items;
         })()}

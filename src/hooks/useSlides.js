@@ -44,7 +44,7 @@ const useSlides = () => {
       return updated;
     });
 
-    setCurrentIndex((prev) => prev + 1);
+    setCurrentIndex(slides.length);
     // Removed stale return value — callers must use the callback for the real index.
   };
 
