@@ -52,7 +52,7 @@ const useSlides = () => {
   // Inserts them immediately AFTER the current slide (not at the end) so new slides
   // appear in context rather than at the far right of the slide strip.
   // Returns the array of newly-created slide IDs so the caller can track the batch for undo.
-  const addMultipleSlides = (slideLinesArray) => {
+  const addMultipleSlides = (slideLinesArray, backgroundOverride = {}) => {
     if (!slideLinesArray.length) return [];
     const insertAt = currentIndex + 1;
     // Generate IDs before the state updater so we can return them synchronously.
@@ -63,9 +63,9 @@ const useSlides = () => {
       editMode: "stanza",
       unsaved: false,
       savedToBackend: false,
-      backgroundColor: cur?.backgroundColor || "#4b5c47",
-      backgroundImage: cur?.backgroundImage || null,
-      backgroundTheme: cur?.backgroundTheme || null,
+      backgroundColor: backgroundOverride.backgroundColor ?? cur?.backgroundColor ?? "#4b5c47",
+      backgroundImage: backgroundOverride.backgroundImage ?? cur?.backgroundImage ?? null,
+      backgroundTheme: backgroundOverride.backgroundTheme ?? cur?.backgroundTheme ?? null,
     }));
     setSlides((prev) => {
       const updated = [...prev];

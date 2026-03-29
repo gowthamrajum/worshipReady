@@ -49,12 +49,13 @@ const INITIAL_SLIDES = [
   },
   {
     label: "Communion",
-    lines: ["Communion"],
+    lines: ["పరిశుద్ధ సంస్కారము", "Holy Communion"],
     icon: <HiOutlineAnnotation size={16} />,
+    editable: true,
   },
   {
     label: "Announcements",
-    lines: ["Announcements"],
+    lines: ["ప్రకటనలు", "Announcements"],
     icon: <HiOutlineDocumentText size={16} />,
   },
   {
@@ -84,6 +85,10 @@ const CustomSlides = ({ onAddSlide }) => {
   const [slideContent, setSlideContent] = useState("");
   const [editIndex, setEditIndex] = useState(null);
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState(null);
+
+  // ── Announcements modal state ─────────────────────────────────────────────
+  const [announcementModalOpen, setAnnouncementModalOpen] = useState(false);
+  const [announcerName, setAnnouncerName] = useState("");
 
   // ── Psalm modal state ─────────────────────────────────────────────────────
   const [psalmModalOpen, setPsalmModalOpen] = useState(false);
@@ -130,6 +135,106 @@ const CustomSlides = ({ onAddSlide }) => {
     onAddSlide?.([slideLines]);
   };
 
+  /** Build Communion slide with communion_easter theme as default background. */
+  const handleAddCommunionSlide = async (lines) => {
+    await ensureFontLoaded();
+    const slideLines = buildSongSlideLines(lines);
+    if (!slideLines.length) return;
+
+    const themeSrc = "/themes/easter/communion_easter.jpg";
+    let bgImage = themeSrc;
+    try {
+      const resp = await fetch(themeSrc);
+      const blob = await resp.blob();
+      bgImage = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      // fall back to URL path if fetch fails
+    }
+
+    onAddSlide?.([slideLines], {
+      backgroundImage: bgImage,
+      backgroundTheme: { category: "Easter", name: "Communion Easter" },
+    });
+  };
+
+  /** Add the main Announcements slide + 3 continuation slides with Neon Blank Easter bg.
+   *  Each slide has English on the left (x=240) and Telugu on the right (x=720). */
+  const handleAddAnnouncementsSlides = async (name) => {
+    const uid = () => `line-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const L = 240;  // left column centre
+    const R = 720;  // right column centre
+
+    // ── Slide 1: Announcements title ────────────────────────────────────────
+    const s1 = `stanza-${uid()}`;
+    const titleY = name.trim() ? 210 : 270;
+    const slide1 = [
+      { id: uid(), text: "Announcements", x: L, y: titleY, fontSize: 52, lineSpacing: 80, stanzaId: s1, textAlign: "center" },
+      { id: uid(), text: "ప్రకటనలు",      x: R, y: titleY, fontSize: 52, lineSpacing: 80, stanzaId: s1, textAlign: "center" },
+      ...(name.trim() ? [{ id: uid(), text: name.trim(), x: 480, y: 340, fontSize: 34, lineSpacing: 55, stanzaId: s1, textAlign: "center" }] : []),
+    ];
+
+    // ── Slide 2: Bible Study ─────────────────────────────────────────────────
+    const s2 = `stanza-${uid()}`;
+    const slide2 = [
+      { id: uid(), text: "Bible Study",            x: L, y: 175, fontSize: 44, lineSpacing: 70, stanzaId: s2, textAlign: "center" },
+      { id: uid(), text: "on Zoom",                x: L, y: 255, fontSize: 36, lineSpacing: 60, stanzaId: s2, textAlign: "center" },
+      { id: uid(), text: "Every Wednesday",         x: L, y: 325, fontSize: 30, lineSpacing: 50, stanzaId: s2, textAlign: "center" },
+      { id: uid(), text: "at 8 PM",                x: L, y: 380, fontSize: 30, lineSpacing: 50, stanzaId: s2, textAlign: "center" },
+      { id: uid(), text: "జూమ్ లో బైబిల్ స్టడీ", x: R, y: 175, fontSize: 38, lineSpacing: 65, stanzaId: s2, textAlign: "center" },
+      { id: uid(), text: "ప్రతి బుధవారం",          x: R, y: 275, fontSize: 32, lineSpacing: 55, stanzaId: s2, textAlign: "center" },
+      { id: uid(), text: "రాత్రి 8 గంటలకు",        x: R, y: 345, fontSize: 32, lineSpacing: 55, stanzaId: s2, textAlign: "center" },
+    ];
+
+    // ── Slide 3: Saturday Prayer Meeting ────────────────────────────────────
+    const s3 = `stanza-${uid()}`;
+    const slide3 = [
+      { id: uid(), text: "Saturday Prayer",         x: L, y: 175, fontSize: 42, lineSpacing: 65, stanzaId: s3, textAlign: "center" },
+      { id: uid(), text: "Meeting on Zoom",          x: L, y: 245, fontSize: 36, lineSpacing: 60, stanzaId: s3, textAlign: "center" },
+      { id: uid(), text: "Every Saturday",           x: L, y: 315, fontSize: 30, lineSpacing: 50, stanzaId: s3, textAlign: "center" },
+      { id: uid(), text: "at 8 PM",                 x: L, y: 370, fontSize: 30, lineSpacing: 50, stanzaId: s3, textAlign: "center" },
+      { id: uid(), text: "శనివారం ప్రార్థన సభ",    x: R, y: 175, fontSize: 38, lineSpacing: 65, stanzaId: s3, textAlign: "center" },
+      { id: uid(), text: "జూమ్ లో",                x: R, y: 260, fontSize: 32, lineSpacing: 55, stanzaId: s3, textAlign: "center" },
+      { id: uid(), text: "ప్రతి శనివారం",           x: R, y: 320, fontSize: 30, lineSpacing: 50, stanzaId: s3, textAlign: "center" },
+      { id: uid(), text: "రాత్రి 8 గంటలకు",        x: R, y: 375, fontSize: 30, lineSpacing: 50, stanzaId: s3, textAlign: "center" },
+    ];
+
+    // ── Slide 4: Worship Service ─────────────────────────────────────────────
+    const s4 = `stanza-${uid()}`;
+    const slide4 = [
+      { id: uid(), text: "Worship Service",          x: L, y: 155, fontSize: 42, lineSpacing: 65, stanzaId: s4, textAlign: "center" },
+      { id: uid(), text: "Every Sunday at 11 AM",    x: L, y: 228, fontSize: 30, lineSpacing: 50, stanzaId: s4, textAlign: "center" },
+      { id: uid(), text: "8001 Mustang Drive",        x: L, y: 290, fontSize: 26, lineSpacing: 44, stanzaId: s4, textAlign: "center" },
+      { id: uid(), text: "Irving, Texas 75038",       x: L, y: 345, fontSize: 26, lineSpacing: 44, stanzaId: s4, textAlign: "center" },
+      { id: uid(), text: "ఆరాధన సేవ",               x: R, y: 155, fontSize: 42, lineSpacing: 65, stanzaId: s4, textAlign: "center" },
+      { id: uid(), text: "ప్రతి ఆదివారం ఉ. 11 గంటలకు", x: R, y: 228, fontSize: 27, lineSpacing: 46, stanzaId: s4, textAlign: "center" },
+      { id: uid(), text: "8001 Mustang Drive",        x: R, y: 290, fontSize: 26, lineSpacing: 44, stanzaId: s4, textAlign: "center" },
+      { id: uid(), text: "Irving, Texas 75038",       x: R, y: 345, fontSize: 26, lineSpacing: 44, stanzaId: s4, textAlign: "center" },
+    ];
+
+    const themeSrc = "/themes/easter/neon_blank_easter.jpg";
+    let bgImage = themeSrc;
+    try {
+      const resp = await fetch(themeSrc);
+      const blob = await resp.blob();
+      bgImage = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      // fall back to URL path if fetch fails
+    }
+
+    onAddSlide?.([slide1, slide2, slide3, slide4], {
+      backgroundImage: bgImage,
+      backgroundTheme: { category: "Easter", name: "Neon Blank Easter" },
+    });
+  };
+
   const handleSlideClick = (item) => {
     if (item.label === PSALM_READING_LABEL) {
       setPsalmModalOpen(true);
@@ -137,6 +242,15 @@ const CustomSlides = ({ onAddSlide }) => {
     }
     if (item.label === "Offerings") {
       handleAddOfferingsSlide();
+      return;
+    }
+    if (item.label === "Communion") {
+      handleAddCommunionSlide(item.lines);
+      return;
+    }
+    if (item.label === "Announcements") {
+      setAnnouncerName("");
+      setAnnouncementModalOpen(true);
       return;
     }
     handleAddSlide(item.lines);
@@ -170,10 +284,12 @@ const CustomSlides = ({ onAddSlide }) => {
     setPsalmError(null);
   };
 
+  const isEditable = (index) =>
+    index >= INITIAL_SLIDES.length || !!customSlides[index]?.editable;
+
   const handleEditClick = (index) => {
+    if (!isEditable(index)) return;
     const item = customSlides[index];
-    const isEditable = index >= INITIAL_SLIDES.length;
-    if (!isEditable) return;
     setSlideName(item.label);
     setSlideContent(item.lines.join("\n"));
     setEditIndex(index);
@@ -181,8 +297,7 @@ const CustomSlides = ({ onAddSlide }) => {
   };
 
   const handleDeleteClick = (index) => {
-    const isEditable = index >= INITIAL_SLIDES.length;
-    if (!isEditable) return;
+    if (!isEditable(index)) return;
     setConfirmDeleteIndex(index);
   };
 
@@ -253,7 +368,7 @@ const CustomSlides = ({ onAddSlide }) => {
                     <FiArrowRight size={16} />
                   </button>
 
-                  {idx >= INITIAL_SLIDES.length && (
+                  {isEditable(idx) && (
                     <>
                       <button
                         onClick={(e) => {
@@ -265,16 +380,18 @@ const CustomSlides = ({ onAddSlide }) => {
                       >
                         <FiEdit2 size={14} />
                       </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteClick(idx);
-                        }}
-                        className="text-red-500 hover:text-red-700 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Delete"
-                      >
-                        <FiTrash2 size={14} />
-                      </button>
+                      {idx >= INITIAL_SLIDES.length && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteClick(idx);
+                          }}
+                          className="text-red-500 hover:text-red-700 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Delete"
+                        >
+                          <FiTrash2 size={14} />
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
@@ -456,6 +573,60 @@ const CustomSlides = ({ onAddSlide }) => {
                     className="px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Add to Slides
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Announcements Modal */}
+      {announcementModalOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center">
+          <div className="bg-white rounded-md shadow-xl max-w-sm w-full p-6 animate-fade-in-up">
+            <div className="flex gap-3 items-start">
+              <HiOutlineDocumentText size={24} className="text-blue-600 mt-1" />
+              <div className="flex-1">
+                <h2 className="text-base font-semibold text-gray-800 mb-1">Announcements</h2>
+                <p className="text-xs text-gray-400 mb-4">
+                  Adds 4 slides — main title + Bible Study, Prayer Meeting, and Worship Service.
+                </p>
+
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Who is Announcing?
+                </label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded px-3 py-2 mb-1 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  value={announcerName}
+                  onChange={(e) => setAnnouncerName(e.target.value)}
+                  placeholder="e.g. Brother John (optional)"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      setAnnouncementModalOpen(false);
+                      handleAddAnnouncementsSlides(announcerName);
+                    }
+                  }}
+                />
+                <p className="text-xs text-gray-400 mb-4">Leave blank to skip the name on the title slide.</p>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setAnnouncementModalOpen(false)}
+                    className="px-4 py-1.5 rounded bg-gray-200 hover:bg-gray-300 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAnnouncementModalOpen(false);
+                      handleAddAnnouncementsSlides(announcerName);
+                    }}
+                    className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-sm"
+                  >
+                    Add Slides
                   </button>
                 </div>
               </div>
