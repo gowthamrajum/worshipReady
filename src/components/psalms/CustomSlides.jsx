@@ -168,13 +168,12 @@ const CustomSlides = ({ onAddSlide }) => {
     const L = 240;  // left column centre
     const R = 720;  // right column centre
 
-    // ── Slide 1: Announcements title ────────────────────────────────────────
+    // ── Slide 1: Announcements title (stacked, centred) ─────────────────────
     const s1 = `stanza-${uid()}`;
-    const titleY = name.trim() ? 210 : 270;
     const slide1 = [
-      { id: uid(), text: "Announcements", x: L, y: titleY, fontSize: 52, lineSpacing: 80, stanzaId: s1, textAlign: "center" },
-      { id: uid(), text: "ప్రకటనలు",      x: R, y: titleY, fontSize: 52, lineSpacing: 80, stanzaId: s1, textAlign: "center" },
-      ...(name.trim() ? [{ id: uid(), text: name.trim(), x: 480, y: 340, fontSize: 34, lineSpacing: 55, stanzaId: s1, textAlign: "center" }] : []),
+      { id: uid(), text: "Announcements", x: 480, y: name.trim() ? 170 : 210, fontSize: 52, lineSpacing: 80, stanzaId: s1, textAlign: "center" },
+      { id: uid(), text: "ప్రకటనలు",      x: 480, y: name.trim() ? 260 : 310, fontSize: 52, lineSpacing: 80, stanzaId: s1, textAlign: "center" },
+      ...(name.trim() ? [{ id: uid(), text: name.trim(), x: 480, y: 360, fontSize: 36, lineSpacing: 58, stanzaId: s1, textAlign: "center" }] : []),
     ];
 
     // ── Slide 2: Bible Study ─────────────────────────────────────────────────
@@ -215,7 +214,7 @@ const CustomSlides = ({ onAddSlide }) => {
       { id: uid(), text: "Irving, Texas 75038",       x: R, y: 345, fontSize: 26, lineSpacing: 44, stanzaId: s4, textAlign: "center" },
     ];
 
-    const themeSrc = "/themes/easter/neon_blank_easter.jpg";
+    const themeSrc = "/themes/easter/green_easter.jpg";
     let bgImage = themeSrc;
     try {
       const resp = await fetch(themeSrc);
@@ -231,7 +230,7 @@ const CustomSlides = ({ onAddSlide }) => {
 
     onAddSlide?.([slide1, slide2, slide3, slide4], {
       backgroundImage: bgImage,
-      backgroundTheme: { category: "Easter", name: "Neon Blank Easter" },
+      backgroundTheme: { category: "Easter", name: "Green Easter" },
     });
   };
 
