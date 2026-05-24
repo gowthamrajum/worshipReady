@@ -57,6 +57,19 @@ function appendQr(lines, qrSrc) {
   ];
 }
 
+// Compose the final slide list based on songMode:
+//   "normal"           → N lyric slides
+//   "normal+offering"  → N lyric + 1 separator + N lyric-with-QR  (2N+1)
+//   "offering"         → 1 separator + N lyric-with-QR            (N+1)
+async function composeSlides(normalSlides, songMode) {
+  if (songMode === "normal") return normalSlides;
+  const qrSrc = await getQrDataUrl();
+  const offeringSlides = normalSlides.map((lines) => appendQr(lines, qrSrc));
+  const separator = buildOfferingsSlide(qrSrc);
+  if (songMode === "offering") return [separator, ...offeringSlides];
+  return [...normalSlides, separator, ...offeringSlides];
+}
+
 const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
   const [expanded, setExpanded]   = useState(false);
   const [mode, setMode]           = useState("drag"); // "drag" | "arrange"
@@ -66,7 +79,8 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
   const [lyrics, setLyrics]       = useState([]);
   const [expandedStanzas, setExpandedStanzas] = useState({});
 
-  const [isOfferingSong, setIsOfferingSong] = useState(false);
+  // "normal" | "normal+offering" | "offering"
+  const [songMode, setSongMode] = useState("normal");
 
   // ── Arrange-mode state ──────────────────────────────────────────────────────
   const [selection, setSelection]             = useState([]);     // ordered stanza IDs
@@ -132,7 +146,7 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
     setRecurringLines(new Set());
     setRecurringRepeatable(true);
     setRecurringWholeFirst(false);
-    setIsOfferingSong(false);
+    setSongMode("normal");
     setLastBatchIds([]);
   };
 
@@ -229,6 +243,38 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
   const stanzaById = Object.fromEntries(lyrics.map((l) => [l.id, l]));
   const finalOrder = getFinalOrder();
 
+  // Compute label / tooltip / color for a Move button given a stanza count and
+  // variant ("all" → "Move All Stanzas …", "selection" → "Move My Selection …").
+  const moveButtonProps = (count, variant) => {
+    if (songMode === "normal+offering") {
+      return {
+        label: variant === "all"
+          ? `Move All: Normal + Offering (${count * 2 + 1} slides)`
+          : `Move: Normal + Offering (${count * 2 + 1} slides)`,
+        title: `Adds ${count} normal slides, then an Offerings separator slide, then ${count} slides with QR code — ${count * 2 + 1} slides total`,
+        bg: "bg-yellow-500 hover:bg-yellow-600",
+      };
+    }
+    if (songMode === "offering") {
+      return {
+        label: variant === "all"
+          ? `Move All: Offering (${count + 1} slides)`
+          : `Move: Offering (${count + 1} slides)`,
+        title: `Adds an Offerings separator slide, then ${count} slides with QR code — ${count + 1} slides total`,
+        bg: "bg-orange-500 hover:bg-orange-600",
+      };
+    }
+    return {
+      label: variant === "all"
+        ? `Move All Stanzas (${count} slides)`
+        : `Move My Selection (${count} slides)`,
+      title: variant === "all"
+        ? `Adds all ${count} stanzas as slides with lyrics only`
+        : `Adds your ${count} selected stanzas as slides with lyrics only`,
+      bg: "bg-indigo-600 hover:bg-indigo-700",
+    };
+  };
+
   const handleMoveToCanvas = async () => {
     const order = getFinalOrder();
     if (!order.length) return;
@@ -246,13 +292,7 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
     };
 
     const normalSlides = order.map(buildLines).filter(Boolean);
-
-    let slideLinesArray = normalSlides;
-    if (isOfferingSong) {
-      const qrSrc = await getQrDataUrl();
-      const offeringSlides = normalSlides.map((lines) => appendQr(lines, qrSrc));
-      slideLinesArray = [...normalSlides, buildOfferingsSlide(qrSrc), ...offeringSlides];
-    }
+    const slideLinesArray = await composeSlides(normalSlides, songMode);
 
     if (slideLinesArray.length > 0) {
       const ids = onAddMultipleSlides?.(slideLinesArray) ?? [];
@@ -269,12 +309,7 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
       .map((stanza) => buildSongSlideLines([...stanza.telugu, ...stanza.english]))
       .filter((lines) => lines.length > 0);
 
-    let slideLinesArray = normalSlides;
-    if (isOfferingSong) {
-      const qrSrc = await getQrDataUrl();
-      const offeringSlides = normalSlides.map((lines) => appendQr(lines, qrSrc));
-      slideLinesArray = [...normalSlides, buildOfferingsSlide(qrSrc), ...offeringSlides];
-    }
+    const slideLinesArray = await composeSlides(normalSlides, songMode);
 
     if (slideLinesArray.length > 0) {
       const ids = onAddMultipleSlides?.(slideLinesArray) ?? [];
@@ -359,9 +394,9 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
             <div className="flex rounded border overflow-hidden text-xs font-medium">
               <button
                 title="Slides are created with song lyrics only — no QR overlay"
-                onClick={() => setIsOfferingSong(false)}
+                onClick={() => setSongMode("normal")}
                 className={`flex-1 py-1.5 transition-colors ${
-                  !isOfferingSong
+                  songMode === "normal"
                     ? "bg-gray-500 text-white"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
@@ -370,14 +405,25 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
               </button>
               <button
                 title="Creates the song twice — once as normal lyric slides, then again with a donations QR code on each slide. Use for offering songs so the congregation can give while singing."
-                onClick={() => setIsOfferingSong(true)}
+                onClick={() => setSongMode("normal+offering")}
                 className={`flex-1 py-1.5 transition-colors ${
-                  isOfferingSong
+                  songMode === "normal+offering"
                     ? "bg-yellow-500 text-white"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
               >
                 Normal + Offering
+              </button>
+              <button
+                title="Inserts an Offerings separator slide, then every lyric slide with a donations QR code in the corner. Use when the offering announcement leads straight into the song."
+                onClick={() => setSongMode("offering")}
+                className={`flex-1 py-1.5 transition-colors ${
+                  songMode === "offering"
+                    ? "bg-orange-500 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                Offering
               </button>
             </div>
 
@@ -409,20 +455,19 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
             {mode === "drag" && (
               <div className="space-y-2">
                 {/* Quick-action: send every stanza to the canvas in one click */}
-                <button
-                  onClick={handleMoveAll}
-                  title={isOfferingSong
-                    ? `Adds ${lyrics.length} normal slides, then an Offerings separator slide, then ${lyrics.length} slides with QR code — ${lyrics.length * 2 + 1} slides total`
-                    : `Adds all ${lyrics.length} stanzas as slides with lyrics only`}
-                  className={`w-full flex items-center justify-center gap-2 py-2 text-sm rounded font-semibold transition-colors text-white ${
-                    isOfferingSong
-                      ? "bg-yellow-500 hover:bg-yellow-600"
-                      : "bg-indigo-600 hover:bg-indigo-700"
-                  }`}
-                >
-                  <FiArrowRight size={14} />
-                  {isOfferingSong ? `Move All: Normal + Offering (${lyrics.length * 2 + 1} slides)` : `Move All Stanzas (${lyrics.length} slides)`}
-                </button>
+                {(() => {
+                  const btn = moveButtonProps(lyrics.length, "all");
+                  return (
+                    <button
+                      onClick={handleMoveAll}
+                      title={btn.title}
+                      className={`w-full flex items-center justify-center gap-2 py-2 text-sm rounded font-semibold transition-colors text-white ${btn.bg}`}
+                    >
+                      <FiArrowRight size={14} />
+                      {btn.label}
+                    </button>
+                  );
+                })()}
                 {lastBatchIds.length > 0 && (
                   <button
                     onClick={handleUndo}
@@ -817,22 +862,19 @@ const SongPreview = ({ dragMode, onAddMultipleSlides, onUndoLastBatch }) => {
                 {/* ── Action buttons ─────────────────────────────────────── */}
                 {selection.length > 0 && (
                   <div className="space-y-2">
-                    <button
-                      onClick={handleMoveToCanvas}
-                      title={isOfferingSong
-                        ? `Adds ${finalOrder.length} normal slides, then an Offerings separator slide, then ${finalOrder.length} slides with QR code — ${finalOrder.length * 2 + 1} slides total`
-                        : `Adds your ${finalOrder.length} selected stanzas as slides with lyrics only`}
-                      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded font-semibold transition-colors text-white ${
-                        isOfferingSong
-                          ? "bg-yellow-500 hover:bg-yellow-600"
-                          : "bg-indigo-600 hover:bg-indigo-700"
-                      }`}
-                    >
-                      <FiArrowRight size={16} />
-                      {isOfferingSong
-                        ? `Move: Normal + Offering (${finalOrder.length * 2 + 1} slides)`
-                        : `Move My Selection (${finalOrder.length} slides)`}
-                    </button>
+                    {(() => {
+                      const btn = moveButtonProps(finalOrder.length, "selection");
+                      return (
+                        <button
+                          onClick={handleMoveToCanvas}
+                          title={btn.title}
+                          className={`w-full flex items-center justify-center gap-2 py-2.5 rounded font-semibold transition-colors text-white ${btn.bg}`}
+                        >
+                          <FiArrowRight size={16} />
+                          {btn.label}
+                        </button>
+                      );
+                    })()}
 
                     {lastBatchIds.length > 0 && (
                       <button
