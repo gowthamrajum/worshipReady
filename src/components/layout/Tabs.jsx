@@ -2,13 +2,14 @@ import React, { useState } from "react";
 import Songs from "../songs/Songs";
 import Psalms from "../psalms/Psalms";
 import SlideComposer from "../slides/SlideComposer";
+import PresenterSync from "../presenter/PresenterSync";
 import HealthCheck from "./HealthCheck";
 import useKeepAlive from "../../hooks/useKeepAlive";
 import { FiActivity } from "react-icons/fi";
 import { API_BASE } from "../../api/client";
 import { RiQuillPenFill } from "react-icons/ri"; // ✍️ Correct pen icon!
 
-const tabs = ["Songs", "Psalms", "Slide Composer", "Health Check"];
+const tabs = ["Songs", "Psalms", "Slide Composer", "Presenter Sync", "Health Check"];
 
 export default function Tabs({ userName }) {
   const [active, setActive] = useState("Songs");
@@ -65,6 +66,7 @@ export default function Tabs({ userName }) {
         {active === "Songs" && <Songs />}
         {active === "Psalms" && <Psalms />}
         {active === "Slide Composer" && <SlideComposer />}
+        {active === "Presenter Sync" && <PresenterSync />}
         {active === "Health Check" && <HealthCheck />}
       </div>
     </div>
