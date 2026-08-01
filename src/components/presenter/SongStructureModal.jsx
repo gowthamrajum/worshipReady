@@ -89,6 +89,41 @@ export default function SongStructureModal({ song, lang, onCancel, onConfirm }) 
     setLineOverride((p) => ({ ...p, [id]: next.flatMap(unitLines) }));
     setGroups((p) => ({ ...p, [id]: held }));
   };
+  /** Which slide (group index) a unit currently sits in. */
+  const groupOfUnit = (grps, unitIndex) => {
+    let at = 0;
+    for (let g = 0; g < grps.length; g++) { at += grps[g]; if (unitIndex < at) return g; }
+    return Math.max(0, grps.length - 1);
+  };
+
+  /**
+   * Move a unit OUT of one stanza and onto the end of another — the Telugu line
+   * and its transliteration travel together across stanzas too. Both groupings
+   * are carried rather than recomputed, since the flat unit-by-unit storage
+   * interleaves the languages and the automatic split would re-paginate both.
+   */
+  const moveUnitTo = (fromId, index, toId) => {
+    if (fromId === toId) return;
+    const fromUnits = unitsOf(fromId);
+    const toUnits = unitsOf(toId);
+    const unit = fromUnits[index];
+    if (!unit) return;
+
+    const fromGroups = groupsOf(fromId).slice();
+    fromGroups[groupOfUnit(fromGroups, index)] -= 1;
+    const nextFromGroups = fromGroups.filter((n) => n > 0);
+
+    const toGroups = groupsOf(toId).slice();
+    if (toGroups.length) toGroups[toGroups.length - 1] += 1; else toGroups.push(1);
+
+    setLineOverride((p) => ({
+      ...p,
+      [fromId]: fromUnits.filter((_, i) => i !== index).flatMap(unitLines),
+      [toId]: [...toUnits, unit].flatMap(unitLines),
+    }));
+    setGroups((p) => ({ ...p, [fromId]: nextFromGroups, [toId]: toGroups }));
+  };
+
   const resetSection = (id) => {
     setGroups((p) => { const n = { ...p }; delete n[id]; return n; });
     setLineOverride((p) => { const n = { ...p }; delete n[id]; return n; });
@@ -266,6 +301,21 @@ export default function SongStructureModal({ song, lang, onCancel, onConfirm }) 
                                 </span>
                               ))}
                             </span>
+                            {order.filter((o) => o !== id && included.has(o)).length > 0 && (
+                              <select
+                                className="shrink-0 text-[10px] border rounded px-1 py-0.5 text-gray-500 bg-white hover:border-indigo-400"
+                                value=""
+                                onChange={(e) => { if (e.target.value) moveUnitTo(id, u, e.target.value); }}
+                                title="Move these lines to another stanza"
+                              >
+                                <option value="">Move to…</option>
+                                {order
+                                  .filter((o) => o !== id && included.has(o))
+                                  .map((o) => (
+                                    <option key={o} value={o}>{byId.get(o)?.label ?? o}</option>
+                                  ))}
+                              </select>
+                            )}
                           </div>
                           {u < all.length - 1 && (
                             <button
