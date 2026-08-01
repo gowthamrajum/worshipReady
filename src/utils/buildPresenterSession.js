@@ -116,6 +116,63 @@ export function chunkBilingualLines(lines, pairsPerSlide) {
   return slides;
 }
 
+/**
+ * One groupable unit: a lyric line, or — in a bilingual stanza — a Telugu line
+ * WITH its English transliteration. Keeping the two sides in separate fields is
+ * what preserves the Telugu-block-then-English-block layout when several units
+ * share a slide, and what makes a unit indivisible when reordering.
+ * (Mirrors SlideUnit / sectionUnits.)
+ */
+export function sectionUnits(lines, bilingual) {
+  const src = lines.filter((l) => l && l.trim().length > 0);
+  if (!bilingual) return src.map((l) => ({ lines: [l], translit: [] }));
+  return chunkBilingualLines(src, 1).map((pair) => ({
+    lines: pair.filter(isTelugu),
+    translit: pair.filter((l) => !isTelugu(l)),
+  }));
+}
+
+/** A unit's lines in render order. */
+export const unitLines = (u) => [...u.lines, ...u.translit];
+
+/** Slice units into slides, stacking every unit's lyric lines then every unit's
+ *  transliterations — the block layout the automatic split produces. */
+export function applyGroups(units, groups) {
+  const slide = (us) => [...us.flatMap((u) => u.lines), ...us.flatMap((u) => u.translit)];
+  const out = [];
+  let i = 0;
+  for (const g of groups) {
+    const n = Math.max(1, Math.floor(g));
+    const s = units.slice(i, i + n);
+    i += n;
+    if (s.length) out.push(slide(s));
+  }
+  if (i < units.length) out.push(slide(units.slice(i)));
+  return out;
+}
+
+/** The unit grouping the automatic split would produce. */
+export function autoGroups(lines, bilingual, lpp) {
+  const units = sectionUnits(lines, bilingual);
+  const src = lines.filter((l) => l && l.trim().length > 0);
+  const chunks = bilingual
+    ? chunkBilingualLines(src, Math.max(1, Math.round(lpp / 2)))
+    : chunkLyricLines(src, lpp, true);
+  const out = [];
+  let u = 0;
+  for (const c of chunks) {
+    let taken = 0, n = 0;
+    while (u < units.length && taken < c.length) { taken += unitLines(units[u]).length; u++; n++; }
+    if (n > 0) out.push(n);
+  }
+  if (u < units.length) out.push(units.length - u);
+  return out;
+}
+
+/** A grouping describes its section only while it accounts for every unit. */
+export const groupsFit = (groups, unitCount) =>
+  !!groups?.length && groups.reduce((a, b) => a + b, 0) === unitCount;
+
 /** Strict check: every Telugu line on the slide keeps its transliteration. */
 export function isSlidePaired(lines) {
   const te = lines.filter((l) => l.trim() && isTelugu(l)).length;
@@ -219,11 +276,19 @@ export function songToItem(song, lang = "both", structure = null) {
 
   const slides = [];
   for (const sec of sections) {
-    const lines = sec.lines.filter((l) => l && l.trim()).map(formatLyricLine);
+    // Lines the operator reordered by moving units, else as written.
+    const raw = structure?.sectionLines?.[sec.id] ?? sec.lines;
+    const lines = raw.filter((l) => l && l.trim()).map(formatLyricLine);
     if (!lines.length) continue;
-    const chunks = both
-      ? chunkBilingualLines(lines, Math.max(1, Math.round(lpp / 2)))
-      : chunkLyricLines(lines, lpp, true);
+    const units = sectionUnits(lines, both);
+    const chosen = structure?.groups?.[sec.id];
+    // An operator grouping wins while it still accounts for every unit; a stale
+    // one falls back to the automatic split rather than mis-slicing.
+    const chunks = groupsFit(chosen, units.length)
+      ? applyGroups(units, chosen)
+      : both
+        ? chunkBilingualLines(lines, Math.max(1, Math.round(lpp / 2)))
+        : chunkLyricLines(lines, lpp, true);
     chunks.forEach((chunk, i) => {
       slides.push({
         id: uid(),
@@ -236,7 +301,31 @@ export function songToItem(song, lang = "both", structure = null) {
     });
   }
   if (!slides.length) return null;
-  return { id: uid(), title: String(song.song_name ?? "Song"), kind: "song", slides };
+  return {
+    id: uid(),
+    title: String(song.song_name ?? "Song"),
+    kind: "song",
+    slides: withFitSample(slides),
+  };
+}
+
+/**
+ * Stamp every slide in a run with the busiest slide's text, so Cantica sizes
+ * them all to what the hardest one needs instead of letting a two-line slide
+ * render twice as large as the six-line one beside it. (Mirrors withFitLines /
+ * SlideContent.fitSample.)
+ */
+export function withFitSample(slides) {
+  const textual = slides.filter((s) => s.lines.length > 0);
+  if (textual.length < 2) return slides;
+  const widest = (s) => s.lines.reduce((m, l) => Math.max(m, l.length), 0);
+  const busiest = textual.reduce((best, s) => {
+    if (s.lines.length !== best.lines.length) return s.lines.length > best.lines.length ? s : best;
+    return widest(s) > widest(best) ? s : best;
+  }, textual[0]);
+  return slides.map((s) =>
+    s.lines.length > 0 && s !== busiest ? { ...s, fitSample: busiest.lines } : s
+  );
 }
 
 /** Psalm verses → a Responsive Reading heading item plus the verses item. */
@@ -277,7 +366,10 @@ export function psalmToItems(chapter, verses, lang = "both") {
     .filter((s) => s.lines.length > 0);
   if (!slides.length) return [];
 
-  return [heading, { id: uid(), title: `Psalm ${reference}`, kind: "scripture", slides }];
+  return [
+    heading,
+    { id: uid(), title: `Psalm ${reference}`, kind: "scripture", slides: withFitSample(slides) },
+  ];
 }
 
 /** Cantica's DEFAULT_THEME / DEFAULT_BACKGROUND (mirror of shared/types.ts). */
