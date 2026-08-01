@@ -123,21 +123,99 @@ export function isSlidePaired(lines) {
   return te === 0 || en === 0 || te === en;
 }
 
-/** A backend song (song_name / main_stanza / stanzas) → one Cantica item. */
-export function songToItem(song, lang = "both") {
-  const both = lang === "both";
-  const lpp = both ? 4 : 2;
-  const sections = [];
+/**
+ * A backend song → its sections in written order, in the chosen language.
+ * Ids are stable for a given song+language so the structure modal can reference
+ * them. (Pallavi is the main_stanza; the rest are the numbered stanzas.)
+ */
+export function songSections(song, lang = "both") {
+  const out = [];
   const ms = song.main_stanza;
   if (ms && (ms.telugu?.length || ms.english?.length)) {
-    sections.push({ label: "Pallavi", lines: pickLines(ms.telugu, ms.english, lang) });
+    out.push({ id: "pallavi", kind: "chorus", label: "Pallavi", lines: pickLines(ms.telugu, ms.english, lang) });
   }
   (song.stanzas ?? []).forEach((st, i) => {
-    sections.push({
-      label: `Stanza ${st.stanza_number ?? i + 1}`,
+    const n = st.stanza_number ?? i + 1;
+    out.push({
+      id: `stanza-${n}-${i}`,
+      kind: "verse",
+      label: `Stanza ${n}`,
       lines: pickLines(st.telugu, st.english, lang),
     });
   });
+  return out.filter((s) => s.lines.some((l) => l && l.trim()));
+}
+
+const blockKey = (s) => s.lines.map((l) => l.trim()).filter(Boolean).join("\n");
+const hasContent = (s) => s.lines.some((l) => l.trim().length > 0);
+
+/**
+ * Guess which section recurs after each stanza (the Pallavi / chorus / refrain).
+ * Prefers an explicit chorus, then a telltale label, then a section whose lyric
+ * block repeats. Null if unsure. (Mirrors detectRecurringSection.)
+ */
+export function detectRecurringSection(sections) {
+  const secs = sections.filter(hasContent);
+  if (secs.length < 2) return null;
+  const chorus = secs.find((s) => s.kind === "chorus");
+  if (chorus) return chorus.id;
+  const labelled = secs.find((s) => /pallavi|chorus|refrain|పల్లవి/i.test(s.label));
+  if (labelled) return labelled.id;
+  const firstId = new Map();
+  const seen = new Map();
+  for (const s of secs) {
+    const k = blockKey(s);
+    if (!k) continue;
+    seen.set(k, (seen.get(k) ?? 0) + 1);
+    if (!firstId.has(k)) firstId.set(k, s.id);
+  }
+  for (const [k, n] of seen) if (n > 1) return firstId.get(k) ?? null;
+  return null;
+}
+
+/**
+ * Play order for the chosen sections. A recurring section plays after every
+ * other included section — leading too when the presenter placed it first — for
+ * the worship-standard Pallavi, V1, Pallavi, V2, Pallavi. Sections that merely
+ * duplicate the refrain's lyrics collapse into it so it never plays twice in a
+ * row. (Mirrors buildSongArrangement.)
+ */
+export function buildSongArrangement(sections, includedIds, recurringId) {
+  const byId = new Map(sections.map((s) => [s.id, s]));
+  const included = includedIds.map((id) => byId.get(id)).filter(Boolean);
+  if (!included.length) return [];
+  const rec = recurringId ? byId.get(recurringId) : undefined;
+  if (rec && includedIds.includes(rec.id) && hasContent(rec)) {
+    const recKey = blockKey(rec);
+    const isRefrain = (s) => blockKey(s) === recKey;
+    const others = included.filter((s) => !isRefrain(s));
+    if (!others.length) return [rec.id];
+    const arr = isRefrain(included[0]) ? [rec.id] : [];
+    for (const s of others) {
+      arr.push(s.id);
+      arr.push(rec.id);
+    }
+    return arr;
+  }
+  return included.map((s) => s.id);
+}
+
+/**
+ * A backend song → one Cantica item.
+ *
+ * `structure` is what the Add-song modal chose: which sections play, in what
+ * order, and which one repeats after each stanza. Omit it and the whole song
+ * plays in written order.
+ */
+export function songToItem(song, lang = "both", structure = null) {
+  const both = lang === "both";
+  const lpp = both ? 4 : 2;
+  const all = songSections(song, lang);
+  const order = structure?.includedIds?.length
+    ? buildSongArrangement(all, structure.includedIds, structure.recurringId ?? null)
+    : all.map((s) => s.id);
+  const byId = new Map(all.map((s) => [s.id, s]));
+  const sections = order.map((id) => byId.get(id)).filter(Boolean);
 
   const slides = [];
   for (const sec of sections) {
@@ -230,7 +308,7 @@ export function buildPresenterSession(name, picks = []) {
   const items = [];
   for (const p of picks) {
     if (p.type === "song") {
-      const it = songToItem(p.song, p.lang ?? "both");
+      const it = songToItem(p.song, p.lang ?? "both", p.structure ?? null);
       if (it) items.push(it);
     } else if (p.type === "psalm") {
       items.push(...psalmToItems(p.chapter, p.verses, p.lang ?? "both"));

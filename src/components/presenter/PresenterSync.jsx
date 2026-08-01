@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { FiDownload, FiPlus, FiTrash2, FiChevronUp, FiChevronDown, FiSearch } from "react-icons/fi";
+import { FiDownload, FiPlus, FiTrash2, FiChevronUp, FiChevronDown, FiSearch, FiMusic, FiBookOpen } from "react-icons/fi";
 import { fetchSongList, fetchSong, fetchPsalmChapter, fetchPsalmRange } from "../../api/client";
 import { buildPresenterSession, countSlides } from "../../utils/buildPresenterSession";
 import { downloadJSON } from "../../utils/downloadJSON";
+import SongStructureModal from "./SongStructureModal";
 
 const LANGS = [
   { id: "both", label: "Both" },
@@ -49,18 +50,32 @@ export default function PresenterSync() {
       .finally(() => setLoadingSongs(false));
   }, [source, debounced]);
 
-  const addSong = async (row) => {
+  /** A song awaiting the structure prompt (which stanzas / what repeats). */
+  const [pendingSong, setPendingSong] = useState(null);
+
+  // Clicking Add loads the full song, then opens the structure modal — the
+  // arrangement is chosen before it lands in the session, as Cantica does.
+  const openSong = async (row) => {
     const id = row.song_id ?? row.id;
     setBusy(true);
     try {
-      const full = (await fetchSong(id)).data;
-      setPicks((p) => [...p, { key: `s-${id}-${p.length}`, type: "song", song: full, lang }]);
-      toast.success(`Added “${full.song_name}”`);
+      setPendingSong((await fetchSong(id)).data);
     } catch (e) {
       toast.error(`Could not load that song: ${e?.message || e}`);
     } finally {
       setBusy(false);
     }
+  };
+
+  const confirmSong = (structure) => {
+    const full = pendingSong;
+    setPendingSong(null);
+    if (!full) return;
+    setPicks((p) => [
+      ...p,
+      { key: `s-${full.song_id ?? full.id}-${p.length}`, type: "song", song: full, lang, structure },
+    ]);
+    toast.success(`Added “${full.song_name}”`);
   };
 
   // ----- psalms -----
@@ -210,9 +225,12 @@ export default function PresenterSync() {
               <div className="max-h-80 overflow-auto divide-y">
                 {songs.map((s) => (
                   <div key={s.song_id ?? s.id} className="flex items-center justify-between py-2">
-                    <span className="text-sm text-gray-800">🎵 {s.song_name}</span>
+                    <span className="flex items-center gap-2 text-sm text-gray-800 min-w-0">
+                      <FiMusic className="text-indigo-500 shrink-0" />
+                      <span className="truncate">{s.song_name}</span>
+                    </span>
                     <button
-                      onClick={() => addSong(s)}
+                      onClick={() => openSong(s)}
                       disabled={busy}
                       className="flex items-center gap-1 text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700 disabled:opacity-40"
                     >
@@ -293,8 +311,13 @@ export default function PresenterSync() {
               {picks.map((p, i) => (
                 <div key={p.key} className="flex items-center gap-2 border rounded px-2 py-1.5">
                   <span className="text-xs text-gray-400 w-5">{i + 1}</span>
+                  {p.type === "song" ? (
+                    <FiMusic className="text-indigo-500 shrink-0" />
+                  ) : (
+                    <FiBookOpen className="text-emerald-600 shrink-0" />
+                  )}
                   <span className="flex-1 text-sm text-gray-800 truncate" title={labelFor(p)}>
-                    {p.type === "song" ? "🎵" : "📖"} {labelFor(p)}
+                    {labelFor(p)}
                   </span>
                   <select
                     className="text-xs border rounded px-1 py-0.5"
@@ -331,6 +354,15 @@ export default function PresenterSync() {
           </div>
         </div>
       </div>
+
+      {pendingSong && (
+        <SongStructureModal
+          song={pendingSong}
+          lang={lang}
+          onCancel={() => setPendingSong(null)}
+          onConfirm={confirmSong}
+        />
+      )}
     </div>
   );
 }
