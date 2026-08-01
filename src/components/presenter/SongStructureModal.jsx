@@ -89,6 +89,46 @@ export default function SongStructureModal({ song, lang, onCancel, onConfirm }) 
     setLineOverride((p) => ({ ...p, [id]: next.flatMap(unitLines) }));
     setGroups((p) => ({ ...p, [id]: held }));
   };
+  /** The section as the slides it will produce: units grouped per slide. */
+  const slidesOf = (id) => {
+    const units = unitsOf(id);
+    const out = [];
+    let i = 0;
+    for (const g of groupsOf(id)) { out.push(units.slice(i, i + g)); i += g; }
+    if (i < units.length) out.push(units.slice(i));
+    return out.filter((x) => x.length > 0);
+  };
+
+  /** Write a slide layout back as lines + grouping (empty slides disappear). */
+  const applySlides = (id, slides) => {
+    const kept = slides.filter((x) => x.length > 0);
+    setLineOverride((p) => ({ ...p, [id]: kept.flat().flatMap(unitLines) }));
+    setGroups((p) => ({ ...p, [id]: kept.map((x) => x.length) }));
+  };
+
+  /** Where a drag started: stanza, slide, unit. */
+  const [drag, setDrag] = useState(null);
+  const [overSlide, setOverSlide] = useState(null);
+
+  /**
+   * Drop the dragged pair onto `toSlide` at `toIndex` (null = the end) — this is
+   * how two lines are put on one slide. The pair moves whole.
+   */
+  const dropUnit = (id, toSlide, toIndex) => {
+    if (!drag || drag.id !== id) return;
+    const slides = slidesOf(id).map((x) => x.slice());
+    const [unit] = slides[drag.s].splice(drag.u, 1);
+    if (!unit) return;
+    while (slides.length <= toSlide) slides.push([]);
+    const target = slides[toSlide];
+    let at = toIndex == null || toIndex > target.length ? target.length : toIndex;
+    if (drag.s === toSlide && drag.u < at) at -= 1;
+    target.splice(Math.max(0, at), 0, unit);
+    applySlides(id, slides);
+    setDrag(null);
+    setOverSlide(null);
+  };
+
   /** Which slide (group index) a unit currently sits in. */
   const groupOfUnit = (grps, unitIndex) => {
     let at = 0;
@@ -260,7 +300,7 @@ export default function SongStructureModal({ song, lang, onCancel, onConfirm }) 
                 {expanded === id && (
                   <div className="ml-10 mt-1 mb-2 border border-dashed rounded p-3 bg-gray-50">
                     <div className="text-xs text-gray-500 mb-2">
-                      Click a divider to split or rejoin a slide
+                      Drag a pair onto another slide to put those lines together
                       {isBi && " · each Telugu line stays with its transliteration"}
                       {(groups[id] || lineOverride[id]) && (
                         <button
@@ -271,68 +311,74 @@ export default function SongStructureModal({ song, lang, onCancel, onConfirm }) 
                         </button>
                       )}
                     </div>
-                    {unitsOf(id).map((unit, u, all) => {
-                      const brk = groupsToBreaks(groupsOf(id));
-                      return (
-                        <div key={u}>
-                          <div className="flex items-center gap-2 px-2 py-1 rounded bg-white border-l-2 border-indigo-300">
-                            <span className="flex flex-col shrink-0">
-                              <button
-                                className="text-gray-400 hover:text-indigo-700 disabled:opacity-25"
-                                onClick={() => moveUnit(id, u, -1)}
-                                disabled={u === 0}
-                                title="Move these lines up (Telugu and its transliteration together)"
-                              >
-                                <FiChevronUp size={12} />
-                              </button>
-                              <button
-                                className="text-gray-400 hover:text-indigo-700 disabled:opacity-25"
-                                onClick={() => moveUnit(id, u, 1)}
-                                disabled={u === all.length - 1}
-                                title="Move these lines down (Telugu and its transliteration together)"
-                              >
-                                <FiChevronDown size={12} />
-                              </button>
-                            </span>
-                            <span className="flex-1 min-w-0">
-                              {unitLines(unit).map((line, k) => (
-                                <span key={k} className="block text-xs text-gray-800 truncate">
-                                  {line}
-                                </span>
-                              ))}
-                            </span>
-                            {order.filter((o) => o !== id && included.has(o)).length > 0 && (
-                              <select
-                                className="shrink-0 text-[10px] border rounded px-1 py-0.5 text-gray-500 bg-white hover:border-indigo-400"
-                                value=""
-                                onChange={(e) => { if (e.target.value) moveUnitTo(id, u, e.target.value); }}
-                                title="Move these lines to another stanza"
-                              >
-                                <option value="">Move to…</option>
-                                {order
-                                  .filter((o) => o !== id && included.has(o))
-                                  .map((o) => (
+                    <div className="flex flex-col gap-1.5">
+                      {slidesOf(id).map((slideUnits, si) => (
+                        <div
+                          key={si}
+                          className={`rounded border p-1.5 ${
+                            overSlide === si && drag?.id === id
+                              ? "border-indigo-400 bg-indigo-50"
+                              : "border-gray-200 bg-white/60"
+                          }`}
+                          onDragOver={(e) => { if (drag?.id !== id) return; e.preventDefault(); setOverSlide(si); }}
+                          onDragLeave={() => setOverSlide((v) => (v === si ? null : v))}
+                          onDrop={(e) => { e.preventDefault(); dropUnit(id, si, null); }}
+                        >
+                          <div className="text-[9px] uppercase tracking-wide text-gray-400 mb-1">
+                            Slide {si + 1}
+                          </div>
+                          {slideUnits.map((unit, ui) => (
+                            <div
+                              key={ui}
+                              draggable
+                              onDragStart={() => setDrag({ id, s: si, u: ui })}
+                              onDragEnd={() => { setDrag(null); setOverSlide(null); }}
+                              onDragOver={(e) => { if (drag?.id !== id) return; e.preventDefault(); e.stopPropagation(); setOverSlide(si); }}
+                              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); dropUnit(id, si, ui); }}
+                              className={`flex items-center gap-2 px-2 py-1 mb-1 last:mb-0 rounded bg-white border-l-2 border-indigo-300 cursor-grab ${
+                                drag?.id === id && drag.s === si && drag.u === ui ? "opacity-40" : ""
+                              }`}
+                            >
+                              <span className="shrink-0 text-gray-300 select-none" title="Drag onto another slide to pair these lines with it">⠿</span>
+                              <span className="flex-1 min-w-0">
+                                {unitLines(unit).map((line, k) => (
+                                  <span key={k} className="block text-xs text-gray-800 truncate">{line}</span>
+                                ))}
+                              </span>
+                              {order.filter((o) => o !== id && included.has(o)).length > 0 && (
+                                <select
+                                  className="shrink-0 text-[10px] border rounded px-1 py-0.5 text-gray-500 bg-white hover:border-indigo-400"
+                                  value=""
+                                  onChange={(e) => {
+                                    if (!e.target.value) return;
+                                    const flat = slidesOf(id).slice(0, si).reduce((n, x) => n + x.length, 0) + ui;
+                                    moveUnitTo(id, flat, e.target.value);
+                                  }}
+                                  title="Move these lines to another stanza"
+                                >
+                                  <option value="">Move to…</option>
+                                  {order.filter((o) => o !== id && included.has(o)).map((o) => (
                                     <option key={o} value={o}>{byId.get(o)?.label ?? o}</option>
                                   ))}
-                              </select>
-                            )}
-                          </div>
-                          {u < all.length - 1 && (
-                            <button
-                              className={`w-full flex items-center gap-2 py-0.5 text-[10px] uppercase tracking-wide ${
-                                brk.has(u) ? "text-indigo-600 font-semibold" : "text-gray-400 hover:text-indigo-600"
-                              }`}
-                              onClick={() => toggleBreak(id, u)}
-                              title={brk.has(u) ? "Rejoin onto one slide" : "Split onto a new slide"}
-                            >
-                              <span className={`flex-1 border-t ${brk.has(u) ? "border-indigo-400" : "border-dashed border-gray-300"}`} />
-                              {brk.has(u) ? "new slide" : "split here"}
-                              <span className={`flex-1 border-t ${brk.has(u) ? "border-indigo-400" : "border-dashed border-gray-300"}`} />
-                            </button>
-                          )}
+                                </select>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      );
-                    })}
+                      ))}
+                      <div
+                        className={`rounded border border-dashed p-2 text-center text-[9px] uppercase tracking-wide ${
+                          overSlide === slidesOf(id).length && drag?.id === id
+                            ? "border-indigo-400 bg-indigo-50 text-indigo-600"
+                            : "border-gray-300 text-gray-400"
+                        }`}
+                        onDragOver={(e) => { if (drag?.id !== id) return; e.preventDefault(); setOverSlide(slidesOf(id).length); }}
+                        onDragLeave={() => setOverSlide(null)}
+                        onDrop={(e) => { e.preventDefault(); dropUnit(id, slidesOf(id).length, null); }}
+                      >
+                        drop here for a new slide
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
