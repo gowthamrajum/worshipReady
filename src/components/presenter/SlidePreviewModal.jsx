@@ -93,9 +93,9 @@ function SlideCard({ slide, theme, background }) {
   );
 }
 
-export default function SlidePreviewModal({ envelope, onlyItemId = null, onClose }) {
+export default function SlidePreviewModal({ envelope, title = "Preview", onClose }) {
   const service = envelope?.service ?? {};
-  const items = (service.items ?? []).filter((it) => !onlyItemId || it.id === onlyItemId);
+  const items = service.items ?? [];
 
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -112,9 +112,7 @@ export default function SlidePreviewModal({ envelope, onlyItemId = null, onClose
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b px-5 py-3">
-          <h2 className="text-base font-semibold text-gray-900">
-            {onlyItemId ? items[0]?.title ?? "Preview" : "Preview"}
-          </h2>
+          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
           <span className="text-xs text-gray-500">
             {items.length} item{items.length === 1 ? "" : "s"} · {total} slide{total === 1 ? "" : "s"}
           </span>

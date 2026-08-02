@@ -130,7 +130,10 @@ export default function PresenterSync() {
   const toggleOffering = (i) =>
     setPicks((p) => p.map((x, j) => (j === i ? { ...x, offering: !x.offering } : x)));
 
-  // Which item the preview is showing: an item id, 'all', or null for closed.
+  // What the preview is showing: 'all', a pick INDEX, or null for closed. It has
+  // to be the pick rather than an item — a psalm builds two items (the
+  // Responsive Reading heading and the verses), so an index into the built items
+  // would show the heading alone and look like the verses never arrived.
   const [previewing, setPreviewing] = useState(null);
 
   // Built on every change so the summary and the download agree.
@@ -366,7 +369,7 @@ export default function PresenterSync() {
                   )}
                   <button
                     className="text-gray-500 hover:text-indigo-700"
-                    onClick={() => setPreviewing(envelope.service.items[i]?.id ?? "all")}
+                    onClick={() => setPreviewing(i)}
                     title="Preview these slides"
                   >
                     <FiEye />
@@ -395,10 +398,14 @@ export default function PresenterSync() {
         </div>
       </div>
 
-      {previewing && (
+      {previewing !== null && (
         <SlidePreviewModal
-          envelope={envelope}
-          onlyItemId={previewing === "all" ? null : previewing}
+          envelope={
+            previewing === "all"
+              ? envelope
+              : buildPresenterSession(sessionName, [picks[previewing]])
+          }
+          title={previewing === "all" ? "Preview" : labelFor(picks[previewing])}
           onClose={() => setPreviewing(null)}
         />
       )}
