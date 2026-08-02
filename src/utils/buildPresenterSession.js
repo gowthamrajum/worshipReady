@@ -305,71 +305,8 @@ export function songToItem(song, lang = "both", structure = null) {
     id: uid(),
     title: String(song.song_name ?? "Song"),
     kind: "song",
-    slides: withFitSample(slides),
+    slides,
   };
-}
-
-/**
- * Stamp every slide in a run with the busiest slide's text, so Cantica sizes
- * them all to what the hardest one needs instead of letting a two-line slide
- * render twice as large as the six-line one beside it. (Mirrors withFitLines /
- * SlideContent.fitSample.)
- */
-export function withFitSample(slides) {
-  const textual = slides.filter((s) => s.lines.length > 0);
-  if (textual.length < 2) return slides;
-  const widest = (s) => s.lines.reduce((m, l) => Math.max(m, l.length), 0);
-  const busiest = textual.reduce((best, s) => {
-    if (s.lines.length !== best.lines.length) return s.lines.length > best.lines.length ? s : best;
-    return widest(s) > widest(best) ? s : best;
-  }, textual[0]);
-  return slides.map((s) =>
-    s.lines.length > 0 && s !== busiest ? { ...s, fitSample: busiest.lines } : s
-  );
-}
-
-/** Psalm verses → a Responsive Reading heading item plus the verses item. */
-export function psalmToItems(chapter, verses, lang = "both") {
-  const list = (verses ?? []).filter((v) => (v.telugu || "").trim() || (v.english || "").trim());
-  if (!list.length) return [];
-  const first = list[0].verse;
-  const last = list[list.length - 1].verse;
-  const reference = first === last ? `${chapter}:${first}` : `${chapter}:${first}-${last}`;
-
-  const heading = {
-    id: uid(),
-    title: "Responsive Reading",
-    kind: "scripture",
-    slides: [
-      {
-        id: uid(),
-        kind: "text",
-        label: "Responsive Reading",
-        lines: [
-          "ఉత్తర ప్రత్యుత్తర వాక్య పఠనం",
-          "Responsive Reading",
-          `కీర్తనలు ${reference}`,
-          `Psalm ${reference}`,
-        ],
-      },
-    ],
-  };
-
-  const slides = list
-    .map((v) => {
-      const ref = `Psalm ${v.chapter ?? chapter}:${v.verse}`;
-      const te = (v.telugu || "").trim();
-      const en = (v.english || "").trim();
-      const lines = (lang === "telugu" ? [te] : lang === "english" ? [en] : [te, en]).filter(Boolean);
-      return { id: uid(), kind: "scripture", label: ref, lines, caption: ref };
-    })
-    .filter((s) => s.lines.length > 0);
-  if (!slides.length) return [];
-
-  return [
-    heading,
-    { id: uid(), title: `Psalm ${reference}`, kind: "scripture", slides: withFitSample(slides) },
-  ];
 }
 
 /** Cantica's DEFAULT_THEME / DEFAULT_BACKGROUND (mirror of shared/types.ts). */
