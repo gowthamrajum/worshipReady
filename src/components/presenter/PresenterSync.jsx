@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { FiDownload, FiPlus, FiTrash2, FiChevronUp, FiChevronDown, FiSearch, FiMusic, FiBookOpen } from "react-icons/fi";
+import { FiDownload, FiPlus, FiTrash2, FiChevronUp, FiChevronDown, FiSearch, FiMusic, FiBookOpen, FiEye } from "react-icons/fi";
 import { fetchSongList, fetchSong, fetchPsalmChapter, fetchPsalmRange } from "../../api/client";
 import { buildPresenterSession, countSlides } from "../../utils/buildPresenterSession";
 import { downloadJSON } from "../../utils/downloadJSON";
 import SongStructureModal from "./SongStructureModal";
+import SlidePreviewModal from "./SlidePreviewModal";
 
 const LANGS = [
   { id: "both", label: "Both" },
@@ -124,6 +125,13 @@ export default function PresenterSync() {
     });
   const setPickLang = (i, l) =>
     setPicks((p) => p.map((x, j) => (j === i ? { ...x, lang: l } : x)));
+  /** Mark a song as the offering song — Cantica drops it at the Offerings slot
+   *  instead of into the worship block. */
+  const toggleOffering = (i) =>
+    setPicks((p) => p.map((x, j) => (j === i ? { ...x, offering: !x.offering } : x)));
+
+  // Which item the preview is showing: an item id, 'all', or null for closed.
+  const [previewing, setPreviewing] = useState(null);
 
   // Built on every change so the summary and the download agree.
   const envelope = useMemo(() => buildPresenterSession(sessionName, picks), [sessionName, picks]);
@@ -183,6 +191,14 @@ export default function PresenterSync() {
           title="Download a cantica-service JSON for Cantica"
         >
           <FiDownload /> Export for Cantica
+        </button>
+        <button
+          onClick={() => setPreviewing("all")}
+          disabled={!picks.length}
+          className="flex items-center gap-2 border border-gray-300 px-4 py-2 rounded hover:bg-gray-50 disabled:opacity-40"
+          title="See every slide as Cantica will show it"
+        >
+          <FiEye /> Preview
         </button>
       </div>
 
@@ -331,6 +347,30 @@ export default function PresenterSync() {
                       </option>
                     ))}
                   </select>
+                  {p.type === "song" && (
+                    <button
+                      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                        p.offering
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-gray-100 text-gray-400 hover:text-gray-600"
+                      }`}
+                      onClick={() => toggleOffering(i)}
+                      title={
+                        p.offering
+                          ? "This is the offering song — Cantica puts it at Offerings"
+                          : "Mark as the offering song"
+                      }
+                    >
+                      Offering
+                    </button>
+                  )}
+                  <button
+                    className="text-gray-500 hover:text-indigo-700"
+                    onClick={() => setPreviewing(envelope.service.items[i]?.id ?? "all")}
+                    title="Preview these slides"
+                  >
+                    <FiEye />
+                  </button>
                   <button className="text-gray-500 hover:text-indigo-700 disabled:opacity-30"
                           onClick={() => moveAt(i, -1)} disabled={i === 0} title="Move up">
                     <FiChevronUp />
@@ -354,6 +394,14 @@ export default function PresenterSync() {
           </div>
         </div>
       </div>
+
+      {previewing && (
+        <SlidePreviewModal
+          envelope={envelope}
+          onlyItemId={previewing === "all" ? null : previewing}
+          onClose={() => setPreviewing(null)}
+        />
+      )}
 
       {pendingSong && (
         <SongStructureModal

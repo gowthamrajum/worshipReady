@@ -7,6 +7,7 @@ import useSessionManager from "../../hooks/useSessionManager";
 import { exportSlideCanvasAsImage } from "../../utils/exportSlideCanvasAsImage";
 import { createPresentation as apiCreatePresentation, PRES_API, updateSlideOrder } from "../../api/client";
 import { generateZipWithPPTAndSession } from "../../utils/generateZipWithPPTAndSession";
+import { buildCanticaSession } from "../../utils/buildCanticaSession";
 import { downloadJSON } from "../../utils/downloadJSON";
 import { saveSession } from "../../utils/sessionManager";
 import { FiFilm } from "react-icons/fi";
@@ -159,6 +160,30 @@ const SlideComposer = () => {
     downloadJSON(sessionData, filename);
     setLastSavedTime(now.toLocaleString());
     setShowSavedModal(true);
+  };
+
+  // Session Maker — export the current presentation as a Cantica-compatible
+  // service JSON (importable in Cantica / lumen-presenter).
+  const handleSessionMaker = async () => {
+    if (!slides?.length) {
+      toast.error("Add a slide before making a session.");
+      return;
+    }
+    saveSession(session.activeSessionId, {
+      presentationName: session.presentationName,
+      slides,
+      currentIndex,
+    });
+    const toastId = toast.loading("Building Cantica session…");
+    try {
+      const envelope = await buildCanticaSession(session.presentationName, slides);
+      const filename = `${session.presentationName || "presentation"}.cantica.json`;
+      downloadJSON(envelope, filename);
+      toast.success("Session Maker JSON ready — import it in Cantica.", { id: toastId });
+    } catch (err) {
+      console.error("Session Maker failed:", err);
+      toast.error("Could not build the session JSON.", { id: toastId });
+    }
   };
 
   const handleDownloadZip = async () => {
@@ -325,6 +350,7 @@ const SlideComposer = () => {
             onDiscard={session.discardDraft}
             onSaveDownload={saveAndDownloadSession}
             onDownloadZip={handleDownloadZip}
+            onSessionMaker={handleSessionMaker}
           />
         </div>
       </div>

@@ -327,10 +327,21 @@ const CANTICA_BACKGROUND = {
 };
 
 /**
+ * Where an imported item belongs in a Sunday order. Cantica reads this on import
+ * to drop worship into the gap between Sunday School and the Sermon, and to put an
+ * offering song against the Offerings slot, rather than appending everything to
+ * the end. An item with no slot appends, which is what older exports do — the
+ * field is additive, so a session built here still imports into a Cantica that
+ * has never heard of it.
+ */
+export const SLOT_WORSHIP = "worship";
+export const SLOT_OFFERING = "offering";
+
+/**
  * Build the `cantica-service` envelope from an ordered selection.
  *
  * @param {string} name     service name
- * @param {Array}  picks    [{ type:'song', song, lang } | { type:'psalm', chapter, verses, lang }]
+ * @param {Array}  picks    [{ type:'song', song, lang, offering } | { type:'psalm', chapter, verses, lang }]
  * @returns {object} a cantica-service v1 envelope
  */
 export function buildPresenterSession(name, picks = []) {
@@ -338,9 +349,10 @@ export function buildPresenterSession(name, picks = []) {
   for (const p of picks) {
     if (p.type === "song") {
       const it = songToItem(p.song, p.lang ?? "both", p.structure ?? null);
-      if (it) items.push(it);
+      if (it) items.push({ ...it, slot: p.offering ? SLOT_OFFERING : SLOT_WORSHIP });
     } else if (p.type === "psalm") {
-      items.push(...psalmToItems(p.chapter, p.verses, p.lang ?? "both"));
+      // A psalm is a reading, never the offering song.
+      items.push(...psalmToItems(p.chapter, p.verses, p.lang ?? "both").map((it) => ({ ...it, slot: SLOT_WORSHIP })));
     }
   }
   return {
