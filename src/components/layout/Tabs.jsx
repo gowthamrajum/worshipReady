@@ -9,7 +9,9 @@ import { FiActivity } from "react-icons/fi";
 import { API_BASE } from "../../api/client";
 import { RiQuillPenFill } from "react-icons/ri"; // ✍️ Correct pen icon!
 
-const tabs = ["Songs", "Psalms", "Slide Composer", "Presenter Sync", "Health Check"];
+// "Slide Composer" is hidden for now — the component and its branch below stay
+// wired, so putting it back is a one-word change.
+const tabs = ["Songs", "Psalms", "Service Builder", "Health Check"];
 
 export default function Tabs({ userName }) {
   const [active, setActive] = useState("Songs");
@@ -66,7 +68,7 @@ export default function Tabs({ userName }) {
         {active === "Songs" && <Songs />}
         {active === "Psalms" && <Psalms />}
         {active === "Slide Composer" && <SlideComposer />}
-        {active === "Presenter Sync" && <PresenterSync />}
+        {active === "Service Builder" && <PresenterSync />}
         {active === "Health Check" && <HealthCheck />}
       </div>
     </div>

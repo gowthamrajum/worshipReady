@@ -31,7 +31,7 @@ function breaksToGroups(breaks, unitCount) {
 }
 
 /**
- * Shown when adding a song in Presenter Sync: choose which stanzas play, reorder
+ * Shown when adding a song in the Service Builder: choose which stanzas play, reorder
  * them, and pick which part recurs after each stanza (auto-detected). Mirrors
  * Cantica's own Add-song dialog so a song added here is arranged the same way.
  */

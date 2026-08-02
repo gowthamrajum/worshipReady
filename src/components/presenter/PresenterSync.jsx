@@ -14,7 +14,7 @@ const LANGS = [
 ];
 
 /**
- * Presenter Sync — pick songs and psalms from the shared catalogue, order them,
+ * Service Builder — pick songs and psalms from the shared catalogue, order them,
  * and export the set as a `cantica-service` JSON that Cantica (lumen-presenter)
  * loads through Sessions ▸ Import service.
  *
@@ -25,7 +25,7 @@ const LANGS = [
 export default function PresenterSync() {
   const [source, setSource] = useState("songs"); // 'songs' | 'psalms'
   const [lang, setLang] = useState("both");
-  const [sessionName, setSessionName] = useState("Presenter Sync Session");
+  const [sessionName, setSessionName] = useState("Sunday Service");
   const [picks, setPicks] = useState([]);
   const [busy, setBusy] = useState(false);
 
@@ -144,7 +144,7 @@ export default function PresenterSync() {
       toast.error("Nothing to export — the picks produced no slides in this language.");
       return;
     }
-    const safe = (sessionName || "Presenter Sync Session").replace(/[\\/:*?"<>|]+/g, " ").trim();
+    const safe = (sessionName || "Sunday Service").replace(/[\\/:*?"<>|]+/g, " ").trim();
     downloadJSON(envelope, `${safe}.cantica.json`);
     toast.success(`Exported ${slideCount} slides — load it in Cantica`);
   };
@@ -164,7 +164,7 @@ export default function PresenterSync() {
             className="w-full border rounded px-3 py-2 focus:outline-none focus:ring"
             value={sessionName}
             onChange={(e) => setSessionName(e.target.value)}
-            placeholder="Presenter Sync Session"
+            placeholder="Sunday Service"
           />
         </div>
         <div>

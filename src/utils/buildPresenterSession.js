@@ -1,5 +1,5 @@
 /**
- * Presenter Sync — turn a picked set of songs and psalms into the portable
+ * Service Builder — turn a picked set of songs and psalms into the portable
  * "cantica-service" JSON envelope that Cantica (lumen-presenter) imports via
  * Sessions ▸ Import service.
  *
@@ -309,6 +309,62 @@ export function songToItem(song, lang = "both", structure = null) {
   };
 }
 
+/**
+ * A psalm becomes the same two items Cantica's own "add psalm" makes: a
+ * Responsive Reading heading, then one scripture slide per verse captioned with
+ * its reference. Mirrors responsiveReadingHeading + bilingualScriptureSlides in
+ * lumen-presenter; keep them in step or a psalm added here reads differently
+ * from one added there.
+ *
+ * @param {number} chapter
+ * @param {Array}  verses  [{ chapter, verse, telugu, english }]
+ * @param {string} lang    'both' | 'telugu' | 'english'
+ */
+export function psalmToItems(chapter, verses = [], lang = "both") {
+  const list = (verses ?? []).filter((v) => v && (v.telugu || v.english));
+  if (!list.length) return [];
+
+  // "23" for a whole chapter, "23:1-6" for a run — the same shape Cantica labels
+  // a reading with.
+  const nums = list.map((v) => Number(v.verse)).filter((n) => Number.isFinite(n));
+  const lo = nums.length ? Math.min(...nums) : null;
+  const hi = nums.length ? Math.max(...nums) : null;
+  const reference =
+    lo == null ? String(chapter) : lo === hi ? `${chapter}:${lo}` : `${chapter}:${lo}-${hi}`;
+
+  const heading = {
+    id: uid(),
+    title: "Responsive Reading",
+    kind: "scripture",
+    slides: [
+      {
+        id: uid(),
+        kind: "text",
+        label: "Responsive Reading",
+        lines: [
+          "ఉత్తర ప్రత్యుత్తర వాక్య పఠనం",
+          "Responsive Reading",
+          `కీర్తనలు ${reference}`,
+          `Psalm ${reference}`,
+        ],
+      },
+    ],
+  };
+
+  const slides = list
+    .map((v) => {
+      const ref = `Psalm ${chapter}:${v.verse}`;
+      const te = String(v.telugu ?? "").trim();
+      const en = String(v.english ?? "").trim();
+      const lines = (lang === "telugu" ? [te] : lang === "english" ? [en] : [te, en]).filter(Boolean);
+      return { id: uid(), kind: "scripture", label: ref, lines, caption: ref };
+    })
+    .filter((s) => s.lines.length > 0);
+  if (!slides.length) return [];
+
+  return [heading, { id: uid(), title: `Psalm ${reference}`, kind: "scripture", slides }];
+}
+
 /** Cantica's DEFAULT_THEME / DEFAULT_BACKGROUND (mirror of shared/types.ts). */
 const CANTICA_THEME = {
   fontFamily: "'Anek Telugu', 'Inter', 'Helvetica Neue', Arial, sans-serif",
@@ -360,7 +416,7 @@ export function buildPresenterSession(name, picks = []) {
     version: 1,
     exportedAt: new Date().toISOString(),
     service: {
-      name: name || "Presenter Sync Session",
+      name: name || "Sunday Service",
       items,
       background: CANTICA_BACKGROUND,
       theme: CANTICA_THEME,
